@@ -81,7 +81,7 @@ public class ClubGoalService {
             throw ApiException.badRequest("Activity is outside the goal date range");
         }
 
-        if (goalContributionRepository.findByGoalAndActivity(goal, activityId).isPresent()) {
+        if (goalContributionRepository.findByGoalAndActivity_Id(goal, activityId).isPresent()) {
             throw ApiException.conflict("Contribution for this activity already exists");
         }
 

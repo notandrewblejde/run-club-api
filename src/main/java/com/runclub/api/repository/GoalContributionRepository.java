@@ -16,7 +16,7 @@ import java.util.UUID;
 public interface GoalContributionRepository extends JpaRepository<GoalContribution, UUID> {
     List<GoalContribution> findByGoal(ClubGoal goal);
     List<GoalContribution> findByGoalAndUser(ClubGoal goal, User user);
-    Optional<GoalContribution> findByGoalAndActivity(ClubGoal goal, UUID activityId);
+    Optional<GoalContribution> findByGoalAndActivity_Id(ClubGoal goal, UUID activityId);
 
     @Query("SELECT SUM(gc.distanceMiles) FROM GoalContribution gc WHERE gc.goal = ?1")
     BigDecimal sumDistancesByGoal(ClubGoal goal);
