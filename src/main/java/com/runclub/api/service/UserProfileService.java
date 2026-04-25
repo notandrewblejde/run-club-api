@@ -1,7 +1,10 @@
 package com.runclub.api.service;
 
+import com.runclub.api.api.ApiException;
 import com.runclub.api.entity.Activity;
 import com.runclub.api.entity.User;
+import com.runclub.api.model.UserProfile;
+import com.runclub.api.model.UserStats;
 import com.runclub.api.repository.ActivityRepository;
 import com.runclub.api.repository.UserRepository;
 import org.springframework.data.domain.Page;
@@ -12,13 +15,8 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 
-/**
- * Aggregations and read-mostly views over the User entity.
- */
 @Service
 public class UserProfileService {
     private final UserRepository userRepository;
@@ -33,34 +31,31 @@ public class UserProfileService {
         this.followService = followService;
     }
 
-    public Map<String, Object> getProfile(UUID userId, UUID requesterId) {
+    public UserProfile getProfile(UUID userId, UUID requesterId) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
 
-        Map<String, Object> stats = computeStats(user);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("id", user.getId());
-        response.put("name", user.getDisplayName());
-        response.put("avatar_url", user.getProfilePicUrl());
-        response.put("bio", null);
-        response.put("city", null);
-        response.put("state", null);
-        response.put("strava_connected", user.getStravaAthleteId() != null);
-        response.put("followers_count", followService.getFollowersCount(user.getId()));
-        response.put("following_count", followService.getFollowingCount(user.getId()));
-        response.put("is_self", requesterId != null && requesterId.equals(user.getId()));
-        if (requesterId != null && !requesterId.equals(user.getId())) {
-            response.put("is_following", followService.isFollowing(requesterId, user.getId()));
+        UserProfile p = new UserProfile();
+        p.id = user.getId();
+        p.name = user.getDisplayName();
+        p.avatarUrl = user.getProfilePicUrl();
+        p.bio = user.getBio();
+        p.city = user.getCity();
+        p.state = user.getState();
+        p.stravaConnected = user.getStravaAthleteId() != null;
+        p.followersCount = followService.getFollowersCount(user.getId());
+        p.followingCount = followService.getFollowingCount(user.getId());
+        p.isSelf = requesterId != null && requesterId.equals(user.getId());
+        if (!p.isSelf && requesterId != null) {
+            p.followedByViewer = followService.isFollowing(requesterId, user.getId());
         }
-        response.put("stats", stats);
-        return response;
+        p.stats = computeStats(user);
+        return p;
     }
 
-    private Map<String, Object> computeStats(User user) {
+    private UserStats computeStats(User user) {
         Pageable allTime = PageRequest.of(0, 1000);
         Page<Activity> recent = activityRepository.findByUserOrderByStartDateDesc(user, allTime);
-        long totalActivities = recent.getTotalElements();
 
         BigDecimal totalMiles = BigDecimal.ZERO;
         long totalSeconds = 0;
@@ -82,13 +77,13 @@ public class UserProfileService {
             }
         }
 
-        Map<String, Object> stats = new HashMap<>();
-        stats.put("total_activities", totalActivities);
-        stats.put("total_miles", totalMiles.setScale(2, RoundingMode.HALF_UP));
-        stats.put("total_moving_seconds", totalSeconds);
-        stats.put("total_elevation_ft", totalElevationFt.setScale(0, RoundingMode.HALF_UP));
-        stats.put("miles_last_30d", milesLast30.setScale(2, RoundingMode.HALF_UP));
-        stats.put("activities_last_30d", activitiesLast30);
-        return stats;
+        UserStats s = new UserStats();
+        s.totalActivities = recent.getTotalElements();
+        s.totalDistanceMiles = totalMiles.setScale(2, RoundingMode.HALF_UP).doubleValue();
+        s.totalMovingSeconds = totalSeconds;
+        s.totalElevationFt = totalElevationFt.setScale(0, RoundingMode.HALF_UP).doubleValue();
+        s.distanceMiles30d = milesLast30.setScale(2, RoundingMode.HALF_UP).doubleValue();
+        s.activities30d = activitiesLast30;
+        return s;
     }
 }

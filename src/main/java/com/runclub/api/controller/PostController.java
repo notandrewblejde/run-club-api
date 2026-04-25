@@ -1,18 +1,22 @@
 package com.runclub.api.controller;
 
-import com.runclub.api.entity.Post;
+import com.runclub.api.api.Auth;
+import com.runclub.api.dto.CreatePostRequest;
+import com.runclub.api.model.Post;
 import com.runclub.api.service.PostService;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/v1/clubs")
+@RequestMapping("/v1/clubs/{clubId}")
+@Tag(name = "Club posts")
 public class PostController {
 
     private final PostService postService;
@@ -21,74 +25,34 @@ public class PostController {
         this.postService = postService;
     }
 
-    @PostMapping("/{clubId}/posts")
-    public ResponseEntity<?> createPost(
+    @PostMapping("/posts")
+    public ResponseEntity<Post> createPost(
             @PathVariable UUID clubId,
-            @RequestBody Map<String, Object> request,
+            @Valid @RequestBody CreatePostRequest body,
             Authentication authentication) {
-        try {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            String authId = jwt.getClaimAsString("sub");
-            UUID userId = UUID.nameUUIDFromBytes(authId.getBytes());
-
-            String content = (String) request.get("content");
-            Object photosObj = request.get("photos");
-            String[] photos = null;
-
-            if (photosObj instanceof java.util.List) {
-                java.util.List<?> photoList = (java.util.List<?>) photosObj;
-                photos = photoList.stream().map(Object::toString).toArray(String[]::new);
-            } else if (photosObj instanceof String[]) {
-                photos = (String[]) photosObj;
-            }
-
-            Post post = postService.createPost(clubId, userId, content, photos);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("id", post.getId());
-            response.put("club_id", post.getClub().getId());
-            response.put("author_id", post.getAuthor().getId());
-            response.put("content", post.getContent());
-            response.put("photos", post.getPhotoUrls());
-            response.put("created_at", post.getCreatedAt());
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        com.runclub.api.entity.Post saved = postService.createPost(
+            clubId, Auth.userId(authentication), body.content, body.photos);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Post.from(saved));
     }
 
-    @DeleteMapping("/{clubId}/posts/{postId}")
-    public ResponseEntity<?> deletePost(
+    @DeleteMapping("/posts/{postId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletePost(
             @PathVariable UUID clubId,
             @PathVariable UUID postId,
             Authentication authentication) {
-        try {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            String authId = jwt.getClaimAsString("sub");
-            UUID userId = UUID.nameUUIDFromBytes(authId.getBytes());
-
-            postService.deletePost(postId, userId);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Post deleted successfully");
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        postService.deletePost(postId, Auth.userId(authentication));
     }
 
-    @GetMapping("/{clubId}/feed")
-    public ResponseEntity<?> getClubFeed(
+    /**
+     * Mixed feed of posts + activities, kept loose-typed for now.
+     * Could be promoted to a typed FeedItem with a discriminated union later.
+     */
+    @GetMapping("/feed")
+    public Map<String, Object> getClubFeed(
             @PathVariable UUID clubId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit) {
-        try {
-            Map<String, Object> feed = postService.getClubFeed(clubId, page, limit);
-            return ResponseEntity.ok(feed);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        return postService.getClubFeed(clubId, page, limit);
     }
 }

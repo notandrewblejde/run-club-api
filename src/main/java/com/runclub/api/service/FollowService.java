@@ -1,5 +1,6 @@
 package com.runclub.api.service;
 
+import com.runclub.api.api.ApiException;
 import com.runclub.api.entity.Activity;
 import com.runclub.api.entity.Follow;
 import com.runclub.api.entity.User;
@@ -29,63 +30,56 @@ public class FollowService {
 
     public Follow followUser(UUID followerId, UUID followingId) {
         if (followerId.equals(followingId)) {
-            throw new RuntimeException("Cannot follow yourself");
+            throw ApiException.badRequest("Cannot follow yourself");
         }
-
         User follower = userRepository.findById(followerId)
-            .orElseThrow(() -> new RuntimeException("Follower not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
         User following = userRepository.findById(followingId)
-            .orElseThrow(() -> new RuntimeException("User to follow not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
 
         if (followRepository.findByFollowerAndFollowing(follower, following).isPresent()) {
-            throw new RuntimeException("Already following this user");
+            throw ApiException.conflict("Already following this user");
         }
 
         Follow follow = new Follow();
         follow.setFollower(follower);
         follow.setFollowing(following);
-
         return followRepository.save(follow);
     }
 
     public void unfollowUser(UUID followerId, UUID followingId) {
         User follower = userRepository.findById(followerId)
-            .orElseThrow(() -> new RuntimeException("Follower not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
         User following = userRepository.findById(followingId)
-            .orElseThrow(() -> new RuntimeException("User to unfollow not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
 
         Follow follow = followRepository.findByFollowerAndFollowing(follower, following)
-            .orElseThrow(() -> new RuntimeException("Not following this user"));
-
+            .orElseThrow(() -> ApiException.notFound("follow"));
         followRepository.delete(follow);
     }
 
     public Page<Follow> getFollowers(UUID userId, int page, int limit) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
-
-        Pageable pageable = PageRequest.of(page - 1, Math.min(limit, 100));
+            .orElseThrow(() -> ApiException.notFound("user"));
+        Pageable pageable = PageRequest.of(Math.max(0, page - 1), Math.min(limit, 100));
         return followRepository.findByFollowing(user, pageable);
     }
 
     public Page<Follow> getFollowing(UUID userId, int page, int limit) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
-
-        Pageable pageable = PageRequest.of(page - 1, Math.min(limit, 100));
+            .orElseThrow(() -> ApiException.notFound("user"));
+        Pageable pageable = PageRequest.of(Math.max(0, page - 1), Math.min(limit, 100));
         return followRepository.findByFollower(user, pageable);
     }
 
     public Page<Activity> getHomeFeed(UUID userId, int page, int limit) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
 
-        Pageable pageable = PageRequest.of(page - 1, Math.min(limit, 50),
+        Pageable pageable = PageRequest.of(Math.max(0, page - 1), Math.min(limit, 50),
             Sort.by(Sort.Direction.DESC, "startDate"));
 
-        Page<Follow> following = followRepository.findByFollower(user,
-            PageRequest.of(0, 1000));
-
+        Page<Follow> following = followRepository.findByFollower(user, PageRequest.of(0, 1000));
         if (following.isEmpty()) {
             return Page.empty(pageable);
         }
@@ -98,23 +92,21 @@ public class FollowService {
     }
 
     public boolean isFollowing(UUID followerId, UUID followingId) {
-        User follower = userRepository.findById(followerId)
-            .orElseThrow(() -> new RuntimeException("Follower not found"));
-        User following = userRepository.findById(followingId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
-
+        User follower = userRepository.findById(followerId).orElse(null);
+        User following = userRepository.findById(followingId).orElse(null);
+        if (follower == null || following == null) return false;
         return followRepository.findByFollowerAndFollowing(follower, following).isPresent();
     }
 
     public long getFollowersCount(UUID userId) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
         return followRepository.countByFollowing(user);
     }
 
     public long getFollowingCount(UUID userId) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
         return followRepository.countByFollower(user);
     }
 }

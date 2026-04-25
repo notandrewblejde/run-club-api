@@ -1,19 +1,25 @@
 package com.runclub.api.controller;
 
-import com.runclub.api.entity.ActivityComment;
+import com.runclub.api.api.ApiList;
+import com.runclub.api.api.Auth;
+import com.runclub.api.dto.CreateCommentRequest;
+import com.runclub.api.model.Comment;
+import com.runclub.api.model.Kudo;
 import com.runclub.api.service.ActivityEngagementService;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/activities/{activityId}")
+@Tag(name = "Activity engagement")
 public class ActivityEngagementController {
 
     private final ActivityEngagementService engagementService;
@@ -22,87 +28,43 @@ public class ActivityEngagementController {
         this.engagementService = engagementService;
     }
 
+    /** Idempotent toggle: POST same activity again to remove the kudo. */
     @PostMapping("/kudos")
-    public ResponseEntity<?> toggleKudo(@PathVariable UUID activityId, Authentication authentication) {
-        try {
-            UUID userId = userId(authentication);
-            boolean kudoed = engagementService.toggleKudo(activityId, userId);
-            return ResponseEntity.ok(Map.of("kudoed", kudoed));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    public Kudo toggleKudo(@PathVariable UUID activityId, Authentication authentication) {
+        return engagementService.toggleKudo(activityId, Auth.userId(authentication));
     }
 
     @GetMapping("/kudos")
-    public ResponseEntity<?> hasKudo(@PathVariable UUID activityId, Authentication authentication) {
-        try {
-            UUID userId = userId(authentication);
-            return ResponseEntity.ok(Map.of("kudoed", engagementService.hasKudo(activityId, userId)));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    public Kudo getKudo(@PathVariable UUID activityId, Authentication authentication) {
+        return engagementService.getKudoState(activityId, Auth.userId(authentication));
     }
 
     @GetMapping("/comments")
-    public ResponseEntity<?> listComments(
+    public ApiList<Comment> listComments(
             @PathVariable UUID activityId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "50") int limit) {
-        try {
-            Page<ActivityComment> comments = engagementService.listComments(activityId, page, limit);
-            Map<String, Object> response = new HashMap<>();
-            response.put("comments", comments.map(c -> Map.of(
-                "id", c.getId(),
-                "user_id", c.getUser().getId(),
-                "user_name", c.getUser().getDisplayName() == null ? "" : c.getUser().getDisplayName(),
-                "user_avatar_url", c.getUser().getProfilePicUrl() == null ? "" : c.getUser().getProfilePicUrl(),
-                "content", c.getContent(),
-                "created_at", c.getCreatedAt()
-            )).getContent());
-            response.put("total", comments.getTotalElements());
-            response.put("page", comments.getNumber() + 1);
-            response.put("limit", limit);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Page<com.runclub.api.entity.ActivityComment> comments = engagementService.listComments(activityId, page, limit);
+        List<Comment> data = comments.getContent().stream().map(Comment::from).toList();
+        return ApiList.of(data, comments.hasNext(), comments.getTotalElements(),
+            "/v1/activities/" + activityId + "/comments");
     }
 
     @PostMapping("/comments")
-    public ResponseEntity<?> addComment(
+    public ResponseEntity<Comment> addComment(
             @PathVariable UUID activityId,
-            @RequestBody Map<String, String> request,
+            @Valid @RequestBody CreateCommentRequest body,
             Authentication authentication) {
-        try {
-            UUID userId = userId(authentication);
-            ActivityComment comment = engagementService.addComment(activityId, userId, request.get("content"));
-            Map<String, Object> response = new HashMap<>();
-            response.put("id", comment.getId());
-            response.put("user_id", comment.getUser().getId());
-            response.put("content", comment.getContent());
-            response.put("created_at", comment.getCreatedAt());
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Comment created = engagementService.addComment(activityId, Auth.userId(authentication), body.content);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @DeleteMapping("/comments/{commentId}")
-    public ResponseEntity<?> deleteComment(
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteComment(
             @PathVariable UUID activityId,
             @PathVariable UUID commentId,
             Authentication authentication) {
-        try {
-            UUID userId = userId(authentication);
-            engagementService.deleteComment(commentId, userId);
-            return ResponseEntity.ok(Map.of("message", "Comment deleted"));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    private UUID userId(Authentication authentication) {
-        Jwt jwt = (Jwt) authentication.getPrincipal();
-        return UUID.nameUUIDFromBytes(jwt.getClaimAsString("sub").getBytes());
+        engagementService.deleteComment(commentId, Auth.userId(authentication));
     }
 }

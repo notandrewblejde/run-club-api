@@ -35,6 +35,15 @@ public class User {
     @Column(name = "strava_token_expires_at")
     private LocalDateTime stravaTokenExpiresAt;
 
+    @Column(name = "bio", columnDefinition = "TEXT")
+    private String bio;
+
+    @Column(name = "city")
+    private String city;
+
+    @Column(name = "state")
+    private String state;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -67,6 +76,15 @@ public class User {
 
     public LocalDateTime getStravaTokenExpiresAt() { return stravaTokenExpiresAt; }
     public void setStravaTokenExpiresAt(LocalDateTime stravaTokenExpiresAt) { this.stravaTokenExpiresAt = stravaTokenExpiresAt; }
+
+    public String getBio() { return bio; }
+    public void setBio(String bio) { this.bio = bio; }
+
+    public String getCity() { return city; }
+    public void setCity(String city) { this.city = city; }
+
+    public String getState() { return state; }
+    public void setState(String state) { this.state = state; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

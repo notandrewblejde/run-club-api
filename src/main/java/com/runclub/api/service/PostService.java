@@ -1,5 +1,6 @@
 package com.runclub.api.service;
 
+import com.runclub.api.api.ApiException;
 import com.runclub.api.entity.Activity;
 import com.runclub.api.entity.Club;
 import com.runclub.api.entity.ClubMembership;
@@ -24,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 public class PostService {
@@ -47,15 +47,15 @@ public class PostService {
 
     public Post createPost(UUID clubId, UUID userId, String content, String[] photoUrls) {
         Club club = clubRepository.findById(clubId)
-            .orElseThrow(() -> new RuntimeException("Club not found"));
+            .orElseThrow(() -> ApiException.notFound("club"));
         User author = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
 
-        ClubMembership membership = clubMembershipRepository.findByClubAndUser(club, author)
-            .orElseThrow(() -> new RuntimeException("User is not a member of this club"));
+        clubMembershipRepository.findByClubAndUser(club, author)
+            .orElseThrow(() -> ApiException.forbidden("User is not a member of this club"));
 
-        if (content == null || content.isEmpty()) {
-            throw new RuntimeException("Post content cannot be empty");
+        if (content == null || content.isBlank()) {
+            throw ApiException.missingField("content");
         }
 
         Post post = new Post();
@@ -71,18 +71,16 @@ public class PostService {
 
     public void deletePost(UUID postId, UUID userId) {
         Post post = postRepository.findById(postId)
-            .orElseThrow(() -> new RuntimeException("Post not found"));
-
+            .orElseThrow(() -> ApiException.notFound("post"));
         if (!post.getAuthor().getId().equals(userId)) {
-            throw new RuntimeException("Only post author can delete");
+            throw ApiException.forbidden("Only post author can delete");
         }
-
         postRepository.delete(post);
     }
 
     public Map<String, Object> getClubFeed(UUID clubId, int page, int limit) {
         Club club = clubRepository.findById(clubId)
-            .orElseThrow(() -> new RuntimeException("Club not found"));
+            .orElseThrow(() -> ApiException.notFound("club"));
 
         Pageable postPageable = PageRequest.of(0, 1000, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Post> posts = postRepository.findByClubOrderByCreatedAtDesc(club, postPageable);
@@ -132,7 +130,7 @@ public class PostService {
             return time != null ? time : LocalDateTime.MIN;
         }, Comparator.reverseOrder()));
 
-        int startIdx = (page - 1) * limit;
+        int startIdx = Math.max(0, (page - 1) * limit);
         int endIdx = Math.min(startIdx + limit, feed.size());
 
         Map<String, Object> response = new HashMap<>();
@@ -140,7 +138,6 @@ public class PostService {
         response.put("total", feed.size());
         response.put("page", page);
         response.put("limit", limit);
-
         return response;
     }
 }

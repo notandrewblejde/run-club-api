@@ -83,6 +83,20 @@
             <version>2.26.14</version>
         </dependency>
 
+        <!-- OpenAPI / Swagger UI: drives /v3/api-docs which the mobile app's
+             type generator consumes to produce src/api/schema.d.ts -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.6.0</version>
+        </dependency>
+
+        <!-- Bean validation for @Valid request bodies -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

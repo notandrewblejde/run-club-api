@@ -1,21 +1,23 @@
 package com.runclub.api.controller;
 
-import com.runclub.api.entity.Activity;
+import com.runclub.api.api.ApiList;
+import com.runclub.api.api.Auth;
+import com.runclub.api.model.Activity;
 import com.runclub.api.service.ActivityService;
 import com.runclub.api.service.AthleteIntelligenceService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/activities")
+@Tag(name = "Activities")
 public class ActivityController {
 
     private final ActivityService activityService;
@@ -27,77 +29,30 @@ public class ActivityController {
     }
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> listActivities(
+    public ApiList<Activity> listMyActivities(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit,
             Authentication authentication) {
-        try {
-            UUID userUuid = userId(authentication);
-            Page<Activity> activities = activityService.getUserActivities(userUuid, page, limit);
-            List<Map<String, Object>> cards = activities.getContent().stream()
-                .map(activityService::buildActivityCard)
-                .toList();
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("activities", cards);
-            response.put("total", activities.getTotalElements());
-            response.put("page", activities.getNumber() + 1);
-            response.put("limit", limit);
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+        UUID userId = Auth.userId(authentication);
+        Page<com.runclub.api.entity.Activity> activities = activityService.getUserActivities(userId, page, limit);
+        List<Activity> data = activities.getContent().stream().map(Activity::from).toList();
+        return ApiList.of(data, activities.hasNext(), activities.getTotalElements(), "/v1/activities");
     }
 
     @GetMapping("/{activityId}")
-    public ResponseEntity<Map<String, Object>> getActivityDetail(
-            @PathVariable UUID activityId,
-            Authentication authentication) {
-        try {
-            UUID userUuid = userId(authentication);
-            Map<String, Object> activityDetail = activityService.getActivityDetail(activityId, userUuid);
-            return ResponseEntity.ok(activityDetail);
-        } catch (RuntimeException e) {
-            if (e.getMessage() != null && e.getMessage().contains("Forbidden")) {
-                return ResponseEntity.status(403).body(new HashMap<>(Map.of("error", e.getMessage())));
-            }
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
+    public Activity getActivity(@PathVariable UUID activityId, Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        return activityService.getActivity(activityId, userId);
     }
 
     @GetMapping("/{activityId}/summary")
-    public ResponseEntity<Map<String, Object>> getActivitySummary(
+    public ResponseEntity<Map<String, Object>> getSummary(
             @PathVariable UUID activityId,
             Authentication authentication) {
-        try {
-            UUID userUuid = userId(authentication);
-            // Authorization check happens via getActivityDetail (which throws on forbidden).
-            activityService.getActivityDetail(activityId, userUuid);
-
-            String summary = athleteIntelligenceService.generateActivitySummary(activityId);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("activity_id", activityId);
-            response.put("summary", summary);
-
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            if (e.getMessage() != null && e.getMessage().contains("Forbidden")) {
-                return ResponseEntity.status(403).body(new HashMap<>(Map.of("error", e.getMessage())));
-            }
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-        }
-    }
-
-    private UUID userId(Authentication authentication) {
-        Jwt jwt = (Jwt) authentication.getPrincipal();
-        return UUID.nameUUIDFromBytes(jwt.getClaimAsString("sub").getBytes());
+        UUID userId = Auth.userId(authentication);
+        // Authorization piggybacks on getActivity (throws 404/403 if needed).
+        activityService.getActivity(activityId, userId);
+        String summary = athleteIntelligenceService.generateActivitySummary(activityId);
+        return ResponseEntity.ok(Map.of("activity_id", activityId, "summary", summary));
     }
 }

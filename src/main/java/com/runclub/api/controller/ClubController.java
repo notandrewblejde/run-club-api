@@ -1,22 +1,28 @@
 package com.runclub.api.controller;
 
-import com.runclub.api.entity.Club;
-import com.runclub.api.entity.ClubMembership;
+import com.runclub.api.api.ApiList;
+import com.runclub.api.api.Auth;
+import com.runclub.api.dto.CreateClubRequest;
+import com.runclub.api.model.Club;
+import com.runclub.api.model.ClubMembership;
 import com.runclub.api.service.ClubService;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/clubs")
+@Tag(name = "Clubs")
 public class ClubController {
 
     private final ClubService clubService;
@@ -26,206 +32,102 @@ public class ClubController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createClub(@RequestBody Map<String, String> request, Authentication authentication) {
-        try {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            String auth0Id = jwt.getClaimAsString("sub");
-            UUID userId = UUID.nameUUIDFromBytes(auth0Id.getBytes());
-
-            String name = request.get("name");
-            String description = request.get("description");
-            String privacyLevel = request.get("privacy_level");
-
-            if (name == null || name.isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Club name is required"));
-            }
-
-            Club club = clubService.createClub(name, description, privacyLevel, userId);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("id", club.getId());
-            response.put("name", club.getName());
-            response.put("description", club.getDescription());
-            response.put("privacy_level", club.getPrivacyLevel());
-            response.put("created_at", club.getCreatedAt());
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    public ResponseEntity<Club> createClub(
+            @Valid @RequestBody CreateClubRequest body,
+            Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        com.runclub.api.entity.Club created = clubService.createClub(
+            body.name, body.description, body.privacyLevel, userId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Club.from(created));
     }
 
     @GetMapping("/public")
-    public ResponseEntity<?> getPublicClubs(
+    public ApiList<Club> listPublicClubs(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit) {
-        try {
-            Pageable pageable = PageRequest.of(page - 1, Math.min(limit, 100));
-            Page<Club> clubs = clubService.getPublicClubs(pageable);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("clubs", clubs.getContent());
-            response.put("total", clubs.getTotalElements());
-            response.put("page", clubs.getNumber() + 1);
-            response.put("limit", limit);
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Pageable pageable = PageRequest.of(Math.max(0, page - 1), Math.min(limit, 100));
+        Page<com.runclub.api.entity.Club> clubs = clubService.getPublicClubs(pageable);
+        List<Club> data = clubs.getContent().stream().map(Club::from).toList();
+        return ApiList.of(data, clubs.hasNext(), clubs.getTotalElements(), "/v1/clubs/public");
     }
 
     @GetMapping("/my-clubs")
-    public ResponseEntity<?> getUserClubs(
+    public ApiList<Club> listMyClubs(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit,
             Authentication authentication) {
-        try {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            String auth0Id = jwt.getClaimAsString("sub");
-            UUID userId = UUID.nameUUIDFromBytes(auth0Id.getBytes());
+        UUID userId = Auth.userId(authentication);
+        Pageable pageable = PageRequest.of(Math.max(0, page - 1), Math.min(limit, 100));
+        Page<com.runclub.api.entity.ClubMembership> memberships = clubService.getUserClubs(userId, pageable);
+        List<Club> data = memberships.getContent().stream().map(m -> {
+            Club c = Club.from(m.getClub());
+            c.viewerRole = m.getRole();
+            return c;
+        }).toList();
+        return ApiList.of(data, memberships.hasNext(), memberships.getTotalElements(), "/v1/clubs/my-clubs");
+    }
 
-            Pageable pageable = PageRequest.of(page - 1, Math.min(limit, 100));
-            Page<ClubMembership> memberships = clubService.getUserClubs(userId, pageable);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("clubs", memberships.map(m -> Map.of(
-                "club_id", m.getClub().getId(),
-                "name", m.getClub().getName(),
-                "role", m.getRole(),
-                "joined_at", m.getJoinedAt()
-            )).getContent());
-            response.put("total", memberships.getTotalElements());
-            response.put("page", memberships.getNumber() + 1);
-            response.put("limit", limit);
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    @GetMapping("/{clubId}")
+    public Club getClub(@PathVariable UUID clubId, Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        return clubService.getClub(clubId, userId);
     }
 
     @PostMapping("/{clubId}/join")
-    public ResponseEntity<?> joinClub(@PathVariable UUID clubId, Authentication authentication) {
-        try {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            String auth0Id = jwt.getClaimAsString("sub");
-            UUID userId = UUID.nameUUIDFromBytes(auth0Id.getBytes());
-
-            ClubMembership membership = clubService.joinClub(clubId, userId);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("club_id", membership.getClub().getId());
-            response.put("role", membership.getRole());
-            response.put("joined_at", membership.getJoinedAt());
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    public ClubMembership joinClub(@PathVariable UUID clubId, Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        return ClubMembership.from(clubService.joinClub(clubId, userId));
     }
 
-    @PostMapping("/{clubId}/invite")
-    public ResponseEntity<?> inviteUser(
+    @PostMapping("/{clubId}/invitations")
+    public ResponseEntity<ClubMembership> invite(
             @PathVariable UUID clubId,
-            @RequestBody Map<String, String> request,
+            @RequestBody Map<String, String> body,
             Authentication authentication) {
-        try {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            String auth0Id = jwt.getClaimAsString("sub");
-            UUID invitedById = UUID.nameUUIDFromBytes(auth0Id.getBytes());
-
-            String invitedUserId = request.get("user_id");
-            if (invitedUserId == null || invitedUserId.isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "user_id is required"));
-            }
-
-            UUID invitedUserUuid = UUID.fromString(invitedUserId);
-            ClubMembership membership = clubService.inviteUserToClub(clubId, invitedUserUuid, invitedById);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("club_id", membership.getClub().getId());
-            response.put("user_id", membership.getUser().getId());
-            response.put("role", membership.getRole());
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        String invitedUserId = body.get("user_id");
+        if (invitedUserId == null || invitedUserId.isEmpty()) {
+            throw com.runclub.api.api.ApiException.missingField("user_id");
         }
+        UUID inviterId = Auth.userId(authentication);
+        UUID inviteeId = UUID.fromString(invitedUserId);
+        com.runclub.api.entity.ClubMembership m = clubService.inviteUserToClub(clubId, inviteeId, inviterId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ClubMembership.from(m));
     }
 
-    @PutMapping("/{clubId}/members/{userId}/role")
-    public ResponseEntity<?> updateMemberRole(
+    @PatchMapping("/{clubId}/members/{userId}")
+    public ClubMembership updateMemberRole(
             @PathVariable UUID clubId,
             @PathVariable UUID userId,
-            @RequestBody Map<String, String> request,
+            @RequestBody Map<String, String> body,
             Authentication authentication) {
-        try {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            String auth0Id = jwt.getClaimAsString("sub");
-            UUID updatedById = UUID.nameUUIDFromBytes(auth0Id.getBytes());
-
-            String newRole = request.get("role");
-            if (newRole == null || newRole.isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "role is required"));
-            }
-
-            clubService.updateMemberRole(clubId, userId, newRole, updatedById);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Member role updated successfully");
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        String role = body.get("role");
+        if (role == null || role.isEmpty()) {
+            throw com.runclub.api.api.ApiException.missingField("role");
         }
+        UUID actorId = Auth.userId(authentication);
+        com.runclub.api.entity.ClubMembership m = clubService.updateMemberRole(clubId, userId, role, actorId);
+        return ClubMembership.from(m);
     }
 
     @DeleteMapping("/{clubId}/members/{userId}")
-    public ResponseEntity<?> removeMember(
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeMember(
             @PathVariable UUID clubId,
             @PathVariable UUID userId,
             Authentication authentication) {
-        try {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            String auth0Id = jwt.getClaimAsString("sub");
-            UUID removedById = UUID.nameUUIDFromBytes(auth0Id.getBytes());
-
-            clubService.removeUserFromClub(clubId, userId, removedById);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Member removed successfully");
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        UUID actorId = Auth.userId(authentication);
+        clubService.removeUserFromClub(clubId, userId, actorId);
     }
 
     @GetMapping("/{clubId}/members")
-    public ResponseEntity<?> getClubMembers(
+    public ApiList<ClubMembership> listMembers(
             @PathVariable UUID clubId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit) {
-        try {
-            Pageable pageable = PageRequest.of(page - 1, Math.min(limit, 100));
-            Page<ClubMembership> members = clubService.getClubMembers(clubId, pageable);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("members", members.map(m -> Map.of(
-                "user_id", m.getUser().getId(),
-                "email", m.getUser().getEmail(),
-                "display_name", m.getUser().getDisplayName(),
-                "role", m.getRole(),
-                "joined_at", m.getJoinedAt()
-            )).getContent());
-            response.put("total", members.getTotalElements());
-            response.put("page", members.getNumber() + 1);
-            response.put("limit", limit);
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Pageable pageable = PageRequest.of(Math.max(0, page - 1), Math.min(limit, 100));
+        Page<com.runclub.api.entity.ClubMembership> members = clubService.getClubMembers(clubId, pageable);
+        List<ClubMembership> data = members.getContent().stream().map(ClubMembership::from).toList();
+        return ApiList.of(data, members.hasNext(), members.getTotalElements(),
+            "/v1/clubs/" + clubId + "/members");
     }
 }

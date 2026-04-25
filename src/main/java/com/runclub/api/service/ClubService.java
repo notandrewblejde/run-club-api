@@ -1,5 +1,6 @@
 package com.runclub.api.service;
 
+import com.runclub.api.api.ApiException;
 import com.runclub.api.entity.Club;
 import com.runclub.api.entity.ClubMembership;
 import com.runclub.api.entity.User;
@@ -29,7 +30,7 @@ public class ClubService {
 
     public Club createClub(String name, String description, String privacyLevel, UUID creatorId) {
         User creator = userRepository.findById(creatorId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
 
         Club club = new Club();
         club.setName(name);
@@ -41,7 +42,6 @@ public class ClubService {
 
         Club savedClub = clubRepository.save(club);
 
-        // Add creator as owner
         ClubMembership ownership = new ClubMembership();
         ownership.setClub(savedClub);
         ownership.setUser(creator);
@@ -52,20 +52,33 @@ public class ClubService {
         return savedClub;
     }
 
+    public com.runclub.api.model.Club getClub(UUID clubId, UUID viewerId) {
+        Club club = clubRepository.findById(clubId)
+            .orElseThrow(() -> ApiException.notFound("club"));
+
+        com.runclub.api.model.Club dto = com.runclub.api.model.Club.from(club);
+        dto.memberCount = membershipRepository.countByClub(club);
+        if (viewerId != null) {
+            User viewer = userRepository.findById(viewerId).orElse(null);
+            if (viewer != null) {
+                membershipRepository.findByClubAndUser(club, viewer)
+                    .ifPresent(m -> dto.viewerRole = m.getRole());
+            }
+        }
+        return dto;
+    }
+
     public ClubMembership joinClub(UUID clubId, UUID userId) {
         Club club = clubRepository.findById(clubId)
-            .orElseThrow(() -> new RuntimeException("Club not found"));
+            .orElseThrow(() -> ApiException.notFound("club"));
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
 
-        // Check if already a member
         if (membershipRepository.findByClubAndUser(club, user).isPresent()) {
-            throw new RuntimeException("User is already a member of this club");
+            throw ApiException.conflict("User is already a member of this club");
         }
-
-        // Check privacy - can only join public clubs without invitation (for now)
         if ("private".equals(club.getPrivacyLevel())) {
-            throw new RuntimeException("Cannot join private clubs without an invitation");
+            throw ApiException.forbidden("Cannot join private clubs without an invitation");
         }
 
         ClubMembership membership = new ClubMembership();
@@ -79,26 +92,22 @@ public class ClubService {
 
     public ClubMembership inviteUserToClub(UUID clubId, UUID invitedUserId, UUID invitedByUserId) {
         Club club = clubRepository.findById(clubId)
-            .orElseThrow(() -> new RuntimeException("Club not found"));
+            .orElseThrow(() -> ApiException.notFound("club"));
         User invitedUser = userRepository.findById(invitedUserId)
-            .orElseThrow(() -> new RuntimeException("Invited user not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
         User invitedBy = userRepository.findById(invitedByUserId)
-            .orElseThrow(() -> new RuntimeException("Inviting user not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
 
-        // Check if inviter is admin or owner
         ClubMembership inviterMembership = membershipRepository.findByClubAndUser(club, invitedBy)
-            .orElseThrow(() -> new RuntimeException("Inviter is not a member of this club"));
+            .orElseThrow(() -> ApiException.forbidden("Inviter is not a member of this club"));
 
-        if (!("owner".equals(inviterMembership.getRole()) || "admin".equals(inviterMembership.getRole()))) {
-            throw new RuntimeException("Only club admins and owners can invite users");
+        if (!isAdminOrOwner(inviterMembership)) {
+            throw ApiException.forbidden("Only club admins and owners can invite users");
         }
-
-        // Check if user is already a member
         if (membershipRepository.findByClubAndUser(club, invitedUser).isPresent()) {
-            throw new RuntimeException("User is already a member of this club");
+            throw ApiException.conflict("User is already a member of this club");
         }
 
-        // Add user to club as member
         ClubMembership membership = new ClubMembership();
         membership.setClub(club);
         membership.setUser(invitedUser);
@@ -108,55 +117,52 @@ public class ClubService {
         return membershipRepository.save(membership);
     }
 
-    public void updateMemberRole(UUID clubId, UUID userId, String newRole, UUID updatedByUserId) {
+    public ClubMembership updateMemberRole(UUID clubId, UUID userId, String newRole, UUID updatedByUserId) {
         Club club = clubRepository.findById(clubId)
-            .orElseThrow(() -> new RuntimeException("Club not found"));
+            .orElseThrow(() -> ApiException.notFound("club"));
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
         User updatedBy = userRepository.findById(updatedByUserId)
-            .orElseThrow(() -> new RuntimeException("Updating user not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
 
-        // Check if updater is owner
         ClubMembership updaterMembership = membershipRepository.findByClubAndUser(club, updatedBy)
-            .orElseThrow(() -> new RuntimeException("Updater is not a member of this club"));
+            .orElseThrow(() -> ApiException.forbidden("Updater is not a member of this club"));
 
         if (!"owner".equals(updaterMembership.getRole())) {
-            throw new RuntimeException("Only club owners can change member roles");
+            throw ApiException.forbidden("Only club owners can change member roles");
         }
 
         ClubMembership membership = membershipRepository.findByClubAndUser(club, user)
-            .orElseThrow(() -> new RuntimeException("User is not a member of this club"));
+            .orElseThrow(() -> ApiException.notFound("club_membership"));
 
         membership.setRole(newRole);
-        membershipRepository.save(membership);
+        return membershipRepository.save(membership);
     }
 
     public void removeUserFromClub(UUID clubId, UUID userId, UUID removedByUserId) {
         Club club = clubRepository.findById(clubId)
-            .orElseThrow(() -> new RuntimeException("Club not found"));
+            .orElseThrow(() -> ApiException.notFound("club"));
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
         User removedBy = userRepository.findById(removedByUserId)
-            .orElseThrow(() -> new RuntimeException("Removing user not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
 
-        // Check if remover is owner or admin
         ClubMembership removerMembership = membershipRepository.findByClubAndUser(club, removedBy)
-            .orElseThrow(() -> new RuntimeException("Remover is not a member of this club"));
+            .orElseThrow(() -> ApiException.forbidden("Remover is not a member of this club"));
 
-        if (!("owner".equals(removerMembership.getRole()) || "admin".equals(removerMembership.getRole()))) {
-            throw new RuntimeException("Only club admins and owners can remove members");
+        if (!isAdminOrOwner(removerMembership)) {
+            throw ApiException.forbidden("Only club admins and owners can remove members");
         }
 
-        // Check if user is the owner - prevent removing the only owner
         if ("owner".equals(removerMembership.getRole()) && userId.equals(removedByUserId)) {
             List<ClubMembership> owners = membershipRepository.findByClubAndRole(club, "owner");
             if (owners.size() <= 1) {
-                throw new RuntimeException("Cannot remove the only owner from a club");
+                throw ApiException.badRequest("Cannot remove the only owner from a club");
             }
         }
 
         ClubMembership membership = membershipRepository.findByClubAndUser(club, user)
-            .orElseThrow(() -> new RuntimeException("User is not a member of this club"));
+            .orElseThrow(() -> ApiException.notFound("club_membership"));
 
         membershipRepository.delete(membership);
     }
@@ -167,13 +173,17 @@ public class ClubService {
 
     public Page<ClubMembership> getUserClubs(UUID userId, Pageable pageable) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> ApiException.notFound("user"));
         return membershipRepository.findByUser(user, pageable);
     }
 
     public Page<ClubMembership> getClubMembers(UUID clubId, Pageable pageable) {
         Club club = clubRepository.findById(clubId)
-            .orElseThrow(() -> new RuntimeException("Club not found"));
+            .orElseThrow(() -> ApiException.notFound("club"));
         return membershipRepository.findByClub(club, pageable);
+    }
+
+    private static boolean isAdminOrOwner(ClubMembership m) {
+        return "owner".equals(m.getRole()) || "admin".equals(m.getRole());
     }
 }
