@@ -9,6 +9,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -26,8 +29,72 @@ public class ActivityService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Pageable pageable = PageRequest.of(page - 1, Math.min(limit, 100)); // Max 100 per page
+        Pageable pageable = PageRequest.of(page - 1, Math.min(limit, 100));
         return activityRepository.findByUserOrderByStartDateDesc(user, pageable);
+    }
+
+    public Map<String, Object> getActivityDetail(UUID activityId, UUID requesterId) {
+        Activity activity = activityRepository.findById(activityId)
+            .orElseThrow(() -> new RuntimeException("Activity not found"));
+
+        User requester = userRepository.findById(requesterId)
+            .orElseThrow(() -> new RuntimeException("Requester not found"));
+
+        User owner = activity.getUser();
+
+        if (!requesterId.equals(owner.getId())) {
+            throw new RuntimeException("Forbidden: You don't have access to this activity");
+        }
+
+        return buildActivityDetailResponse(activity);
+    }
+
+    private Map<String, Object> buildActivityDetailResponse(Activity activity) {
+        User owner = activity.getUser();
+        Map<String, Object> response = new HashMap<>();
+
+        response.put("id", activity.getId());
+        response.put("strava_id", activity.getStravaActivityId());
+        response.put("user_id", owner.getId());
+
+        Map<String, Object> userMap = new HashMap<>();
+        userMap.put("id", owner.getId());
+        userMap.put("name", owner.getDisplayName());
+        userMap.put("avatar_url", owner.getProfilePicUrl());
+        response.put("user", userMap);
+
+        response.put("name", activity.getName());
+        response.put("sport_type", activity.getType());
+        response.put("start_date", activity.getStartDate());
+        response.put("city", activity.getCity());
+        response.put("state", activity.getState());
+
+        response.put("distance_meters", activity.getDistanceMeters());
+        response.put("distance_miles", activity.getDistanceMiles());
+        response.put("moving_time_secs", activity.getMovingTimeSeconds());
+        response.put("elapsed_time_secs", activity.getElapsedTimeSeconds());
+
+        if (activity.getMovingTimeSeconds() != null && activity.getDistanceMeters() != null) {
+            BigDecimal miles = activity.getDistanceMiles();
+            if (miles != null && miles.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal secsPerMile = new BigDecimal(activity.getMovingTimeSeconds())
+                    .divide(miles, 0, java.math.RoundingMode.HALF_UP);
+                response.put("avg_pace_secs_per_mile", secsPerMile.longValue());
+            }
+        }
+
+        response.put("avg_pace_display", activity.getAvgPaceDisplay());
+        response.put("elevation_gain_ft", activity.getElevationGainFt());
+        response.put("max_elevation_ft", activity.getMaxElevationFt());
+        response.put("avg_heart_rate_bpm", activity.getAvgHeartRateBpm());
+        response.put("max_heart_rate_bpm", activity.getMaxHeartRateBpm());
+        response.put("map_polyline", activity.getMapPolyline());
+        response.put("photos", activity.getPhotos());
+        response.put("kudos_count", activity.getKudosCount());
+        response.put("comment_count", activity.getCommentCount());
+        response.put("is_personal_record", activity.getIsPersonalRecord());
+
+        return response;
     }
 
     public Activity upsertActivity(Activity activity) {

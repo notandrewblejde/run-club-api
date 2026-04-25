@@ -31,7 +31,6 @@ public class ActivityController {
             Jwt jwt = (Jwt) authentication.getPrincipal();
             String userId = jwt.getClaimAsString("sub");
 
-            // For now, extract UUID from sub claim - in production, this would be the user's UUID
             UUID userUuid = UUID.nameUUIDFromBytes(userId.getBytes());
 
             Page<Activity> activities = activityService.getUserActivities(userUuid, page, limit);
@@ -44,6 +43,29 @@ public class ActivityController {
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    @GetMapping("/{activityId}")
+    public ResponseEntity<Map<String, Object>> getActivityDetail(
+            @PathVariable UUID activityId,
+            Authentication authentication) {
+        try {
+            Jwt jwt = (Jwt) authentication.getPrincipal();
+            String userId = jwt.getClaimAsString("sub");
+
+            UUID userUuid = UUID.nameUUIDFromBytes(userId.getBytes());
+
+            Map<String, Object> activityDetail = activityService.getActivityDetail(activityId, userUuid);
+
+            return ResponseEntity.ok(activityDetail);
+        } catch (RuntimeException e) {
+            if (e.getMessage().contains("Forbidden")) {
+                return ResponseEntity.status(403).body(new HashMap<>(Map.of("error", e.getMessage())));
+            }
             Map<String, Object> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
