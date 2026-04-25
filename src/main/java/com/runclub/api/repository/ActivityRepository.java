@@ -14,4 +14,5 @@ import java.util.UUID;
 public interface ActivityRepository extends JpaRepository<Activity, UUID> {
     Page<Activity> findByUserOrderByStartDateDesc(User user, Pageable pageable);
     Optional<Activity> findByStravaActivityId(Long stravaActivityId);
+    Page<Activity> findByUserInOrderByStartDateDesc(java.util.List<User> users, Pageable pageable);
 }
