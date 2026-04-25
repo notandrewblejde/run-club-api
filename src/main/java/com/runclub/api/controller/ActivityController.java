@@ -2,6 +2,7 @@ package com.runclub.api.controller;
 
 import com.runclub.api.entity.Activity;
 import com.runclub.api.service.ActivityService;
+import com.runclub.api.service.AthleteIntelligenceService;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -17,9 +18,11 @@ import java.util.UUID;
 public class ActivityController {
 
     private final ActivityService activityService;
+    private final AthleteIntelligenceService athleteIntelligenceService;
 
-    public ActivityController(ActivityService activityService) {
+    public ActivityController(ActivityService activityService, AthleteIntelligenceService athleteIntelligenceService) {
         this.activityService = activityService;
+        this.athleteIntelligenceService = athleteIntelligenceService;
     }
 
     @GetMapping
@@ -62,6 +65,34 @@ public class ActivityController {
             Map<String, Object> activityDetail = activityService.getActivityDetail(activityId, userUuid);
 
             return ResponseEntity.ok(activityDetail);
+        } catch (RuntimeException e) {
+            if (e.getMessage().contains("Forbidden")) {
+                return ResponseEntity.status(403).body(new HashMap<>(Map.of("error", e.getMessage())));
+            }
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    @GetMapping("/{activityId}/summary")
+    public ResponseEntity<Map<String, Object>> getActivitySummary(
+            @PathVariable UUID activityId,
+            Authentication authentication) {
+        try {
+            Jwt jwt = (Jwt) authentication.getPrincipal();
+            String userId = jwt.getClaimAsString("sub");
+
+            UUID userUuid = UUID.nameUUIDFromBytes(userId.getBytes());
+            activityService.getActivityDetail(activityId, userUuid);
+
+            String summary = athleteIntelligenceService.generateActivitySummary(activityId);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("activity_id", activityId);
+            response.put("summary", summary);
+
+            return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             if (e.getMessage().contains("Forbidden")) {
                 return ResponseEntity.status(403).body(new HashMap<>(Map.of("error", e.getMessage())));
