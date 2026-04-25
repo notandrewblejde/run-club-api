@@ -10,6 +10,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -31,15 +32,14 @@ public class ActivityController {
             @RequestParam(defaultValue = "20") int limit,
             Authentication authentication) {
         try {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            String userId = jwt.getClaimAsString("sub");
-
-            UUID userUuid = UUID.nameUUIDFromBytes(userId.getBytes());
-
+            UUID userUuid = userId(authentication);
             Page<Activity> activities = activityService.getUserActivities(userUuid, page, limit);
+            List<Map<String, Object>> cards = activities.getContent().stream()
+                .map(activityService::buildActivityCard)
+                .toList();
 
             Map<String, Object> response = new HashMap<>();
-            response.put("activities", activities.getContent());
+            response.put("activities", cards);
             response.put("total", activities.getTotalElements());
             response.put("page", activities.getNumber() + 1);
             response.put("limit", limit);
@@ -57,16 +57,11 @@ public class ActivityController {
             @PathVariable UUID activityId,
             Authentication authentication) {
         try {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            String userId = jwt.getClaimAsString("sub");
-
-            UUID userUuid = UUID.nameUUIDFromBytes(userId.getBytes());
-
+            UUID userUuid = userId(authentication);
             Map<String, Object> activityDetail = activityService.getActivityDetail(activityId, userUuid);
-
             return ResponseEntity.ok(activityDetail);
         } catch (RuntimeException e) {
-            if (e.getMessage().contains("Forbidden")) {
+            if (e.getMessage() != null && e.getMessage().contains("Forbidden")) {
                 return ResponseEntity.status(403).body(new HashMap<>(Map.of("error", e.getMessage())));
             }
             Map<String, Object> error = new HashMap<>();
@@ -80,10 +75,8 @@ public class ActivityController {
             @PathVariable UUID activityId,
             Authentication authentication) {
         try {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            String userId = jwt.getClaimAsString("sub");
-
-            UUID userUuid = UUID.nameUUIDFromBytes(userId.getBytes());
+            UUID userUuid = userId(authentication);
+            // Authorization check happens via getActivityDetail (which throws on forbidden).
             activityService.getActivityDetail(activityId, userUuid);
 
             String summary = athleteIntelligenceService.generateActivitySummary(activityId);
@@ -94,12 +87,17 @@ public class ActivityController {
 
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
-            if (e.getMessage().contains("Forbidden")) {
+            if (e.getMessage() != null && e.getMessage().contains("Forbidden")) {
                 return ResponseEntity.status(403).body(new HashMap<>(Map.of("error", e.getMessage())));
             }
             Map<String, Object> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
         }
+    }
+
+    private UUID userId(Authentication authentication) {
+        Jwt jwt = (Jwt) authentication.getPrincipal();
+        return UUID.nameUUIDFromBytes(jwt.getClaimAsString("sub").getBytes());
     }
 }

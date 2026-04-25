@@ -19,6 +19,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(HttpMethod.GET, "/health").permitAll()
                 .requestMatchers(HttpMethod.POST, "/v1/strava/webhook").permitAll()
+                .requestMatchers(HttpMethod.GET, "/v1/strava/webhook").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer()

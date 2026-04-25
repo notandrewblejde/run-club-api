@@ -2,6 +2,7 @@ package com.runclub.api.service;
 
 import com.runclub.api.entity.Activity;
 import com.runclub.api.entity.User;
+import com.runclub.api.repository.ActivityKudoRepository;
 import com.runclub.api.repository.ActivityRepository;
 import com.runclub.api.repository.UserRepository;
 import org.springframework.data.domain.Page;
@@ -19,17 +20,21 @@ public class ActivityService {
 
     private final ActivityRepository activityRepository;
     private final UserRepository userRepository;
+    private final ActivityKudoRepository kudoRepository;
 
-    public ActivityService(ActivityRepository activityRepository, UserRepository userRepository) {
+    public ActivityService(ActivityRepository activityRepository,
+                           UserRepository userRepository,
+                           ActivityKudoRepository kudoRepository) {
         this.activityRepository = activityRepository;
         this.userRepository = userRepository;
+        this.kudoRepository = kudoRepository;
     }
 
     public Page<Activity> getUserActivities(UUID userId, int page, int limit) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Pageable pageable = PageRequest.of(page - 1, Math.min(limit, 100));
+        Pageable pageable = PageRequest.of(Math.max(0, page - 1), Math.min(limit, 100));
         return activityRepository.findByUserOrderByStartDateDesc(user, pageable);
     }
 
@@ -37,15 +42,21 @@ public class ActivityService {
         Activity activity = activityRepository.findById(activityId)
             .orElseThrow(() -> new RuntimeException("Activity not found"));
 
-        User requester = userRepository.findById(requesterId)
+        userRepository.findById(requesterId)
             .orElseThrow(() -> new RuntimeException("Requester not found"));
 
-        User owner = activity.getUser();
+        // Activities are visible to any authenticated user for now. Privacy levels
+        // (public / followers-only / club-only) can layer on later.
+        Map<String, Object> response = buildActivityDetailResponse(activity);
+        response.put("kudoed", kudoRepository.findByActivityAndUser(
+            activity,
+            userRepository.findById(requesterId).get()
+        ).isPresent());
+        response.put("is_owner", activity.getUser().getId().equals(requesterId));
+        return response;
+    }
 
-        if (!requesterId.equals(owner.getId())) {
-            throw new RuntimeException("Forbidden: You don't have access to this activity");
-        }
-
+    public Map<String, Object> buildActivityCard(Activity activity) {
         return buildActivityDetailResponse(activity);
     }
 

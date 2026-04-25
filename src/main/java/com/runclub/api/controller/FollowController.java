@@ -2,6 +2,7 @@ package com.runclub.api.controller;
 
 import com.runclub.api.entity.Activity;
 import com.runclub.api.entity.Follow;
+import com.runclub.api.service.ActivityService;
 import com.runclub.api.service.FollowService;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -18,9 +19,11 @@ import java.util.UUID;
 public class FollowController {
 
     private final FollowService followService;
+    private final ActivityService activityService;
 
-    public FollowController(FollowService followService) {
+    public FollowController(FollowService followService, ActivityService activityService) {
         this.followService = followService;
+        this.activityService = activityService;
     }
 
     @PostMapping("/users/{userId}/follow")
@@ -128,7 +131,9 @@ public class FollowController {
             Page<Activity> feed = followService.getHomeFeed(userId, page, limit);
 
             Map<String, Object> response = new HashMap<>();
-            response.put("activities", feed.getContent());
+            response.put("activities", feed.getContent().stream()
+                .map(activityService::buildActivityCard)
+                .toList());
             response.put("total", feed.getTotalElements());
             response.put("page", feed.getNumber() + 1);
             response.put("limit", limit);

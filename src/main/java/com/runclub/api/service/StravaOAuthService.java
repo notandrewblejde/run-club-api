@@ -3,6 +3,7 @@ package com.runclub.api.service;
 import com.runclub.api.dto.StravaTokenResponse;
 import com.runclub.api.entity.User;
 import com.runclub.api.repository.UserRepository;
+import com.runclub.api.security.TokenCipher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -33,10 +34,12 @@ public class StravaOAuthService {
 
     private final UserRepository userRepository;
     private final RestTemplate restTemplate;
+    private final TokenCipher tokenCipher;
 
-    public StravaOAuthService(UserRepository userRepository, RestTemplate restTemplate) {
+    public StravaOAuthService(UserRepository userRepository, RestTemplate restTemplate, TokenCipher tokenCipher) {
         this.userRepository = userRepository;
         this.restTemplate = restTemplate;
+        this.tokenCipher = tokenCipher;
     }
 
     public String getAuthorizationUrl() {
@@ -64,13 +67,9 @@ public class StravaOAuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
             user.setStravaAthleteId(response.getAthlete().getId());
-            user.setStravaAccessToken(response.getAccessToken());
-            user.setStravaRefreshToken(response.getRefreshToken());
-            LocalDateTime expiresAt = LocalDateTime.ofInstant(
-                Instant.ofEpochSecond(response.getExpiresAt()),
-                ZoneId.systemDefault()
-            );
-            user.setStravaTokenExpiresAt(expiresAt);
+            user.setStravaAccessToken(tokenCipher.encrypt(response.getAccessToken()));
+            user.setStravaRefreshToken(tokenCipher.encrypt(response.getRefreshToken()));
+            user.setStravaTokenExpiresAt(toLocalDateTime(response.getExpiresAt()));
             user.setUpdatedAt(LocalDateTime.now());
 
             return userRepository.save(user);
@@ -81,7 +80,8 @@ public class StravaOAuthService {
     }
 
     public void refreshStravaToken(User user) {
-        if (user.getStravaRefreshToken() == null) {
+        String refresh = tokenCipher.decrypt(user.getStravaRefreshToken());
+        if (refresh == null) {
             throw new RuntimeException("User does not have a refresh token");
         }
 
@@ -89,7 +89,7 @@ public class StravaOAuthService {
         refreshRequest.put("client_id", clientId);
         refreshRequest.put("client_secret", clientSecret);
         refreshRequest.put("grant_type", "refresh_token");
-        refreshRequest.put("refresh_token", user.getStravaRefreshToken());
+        refreshRequest.put("refresh_token", refresh);
 
         try {
             StravaTokenResponse response = restTemplate.postForObject(STRAVA_TOKEN_URL, refreshRequest, StravaTokenResponse.class);
@@ -97,13 +97,9 @@ public class StravaOAuthService {
                 throw new RuntimeException("Failed to refresh Strava token");
             }
 
-            user.setStravaAccessToken(response.getAccessToken());
-            user.setStravaRefreshToken(response.getRefreshToken());
-            LocalDateTime expiresAt = LocalDateTime.ofInstant(
-                Instant.ofEpochSecond(response.getExpiresAt()),
-                ZoneId.systemDefault()
-            );
-            user.setStravaTokenExpiresAt(expiresAt);
+            user.setStravaAccessToken(tokenCipher.encrypt(response.getAccessToken()));
+            user.setStravaRefreshToken(tokenCipher.encrypt(response.getRefreshToken()));
+            user.setStravaTokenExpiresAt(toLocalDateTime(response.getExpiresAt()));
             user.setUpdatedAt(LocalDateTime.now());
 
             userRepository.save(user);
@@ -113,20 +109,26 @@ public class StravaOAuthService {
         }
     }
 
+    /**
+     * Returns a usable access token, refreshing if expired or near-expiry (10 min buffer).
+     * Always returns a decrypted token suitable for use in an API request.
+     */
     public String getValidAccessToken(User user) {
-        if (user.getStravaTokenExpiresAt() != null && user.getStravaTokenExpiresAt().isBefore(LocalDateTime.now().plusMinutes(10))) {
+        if (user.getStravaTokenExpiresAt() != null
+                && user.getStravaTokenExpiresAt().isBefore(LocalDateTime.now().plusMinutes(10))) {
             refreshStravaToken(user);
         }
-        return user.getStravaAccessToken();
+        return tokenCipher.decrypt(user.getStravaAccessToken());
     }
 
     public void disconnectStrava(User user) {
-        if (user.getStravaAccessToken() == null) {
+        String token = tokenCipher.decrypt(user.getStravaAccessToken());
+        if (token == null) {
             return;
         }
 
         Map<String, Object> deauthRequest = new HashMap<>();
-        deauthRequest.put("access_token", user.getStravaAccessToken());
+        deauthRequest.put("access_token", token);
 
         try {
             restTemplate.postForObject(STRAVA_DEAUTH_URL, deauthRequest, Object.class);
@@ -140,5 +142,10 @@ public class StravaOAuthService {
         user.setStravaAthleteId(null);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+    }
+
+    private LocalDateTime toLocalDateTime(Long epochSeconds) {
+        if (epochSeconds == null) return null;
+        return LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneId.systemDefault());
     }
 }
