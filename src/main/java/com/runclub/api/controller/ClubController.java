@@ -5,6 +5,8 @@ import com.runclub.api.api.Auth;
 import com.runclub.api.dto.CreateClubRequest;
 import com.runclub.api.model.Club;
 import com.runclub.api.model.ClubMembership;
+import com.runclub.api.model.LeaderboardEntry;
+import com.runclub.api.service.ClubLeaderboardService;
 import com.runclub.api.service.ClubService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -26,9 +28,11 @@ import java.util.UUID;
 public class ClubController {
 
     private final ClubService clubService;
+    private final ClubLeaderboardService clubLeaderboardService;
 
-    public ClubController(ClubService clubService) {
+    public ClubController(ClubService clubService, ClubLeaderboardService clubLeaderboardService) {
         this.clubService = clubService;
+        this.clubLeaderboardService = clubLeaderboardService;
     }
 
     @PostMapping
@@ -71,6 +75,17 @@ public class ClubController {
     public Club getClub(@PathVariable UUID clubId, Authentication authentication) {
         UUID userId = Auth.userId(authentication);
         return clubService.getClub(clubId, userId);
+    }
+
+    @GetMapping("/{clubId}/leaderboard")
+    public ApiList<LeaderboardEntry> getClubLeaderboard(
+            @PathVariable UUID clubId,
+            @RequestParam(required = false) String window,
+            @RequestParam(required = false) UUID goalId,
+            @RequestParam(defaultValue = "10") int limit) {
+        List<LeaderboardEntry> entries = clubLeaderboardService.getLeaderboard(clubId, window, goalId, limit);
+        return ApiList.of(entries, false, entries.size(),
+            "/v1/clubs/" + clubId + "/leaderboard");
     }
 
     @PostMapping("/{clubId}/join")

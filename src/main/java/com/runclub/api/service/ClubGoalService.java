@@ -126,29 +126,38 @@ public class ClubGoalService {
         return p;
     }
 
-    public List<LeaderboardEntry> getGoalLeaderboard(UUID goalId) {
+    public List<LeaderboardEntry> getGoalLeaderboardForClub(UUID clubId, UUID goalId, int maxEntries) {
         ClubGoal goal = clubGoalRepository.findById(goalId)
             .orElseThrow(() -> ApiException.notFound("goal"));
+        if (!goal.getClub().getId().equals(clubId)) {
+            throw ApiException.notFound("goal");
+        }
 
         List<GoalContribution> contributions = goalContributionRepository.findByGoal(goal);
 
-        Map<User, BigDecimal> userTotals = new HashMap<>();
+        Map<UUID, BigDecimal> byUserId = new HashMap<>();
+        Map<UUID, User> userById = new HashMap<>();
         for (GoalContribution contrib : contributions) {
             User user = contrib.getUser();
-            BigDecimal current = userTotals.getOrDefault(user, BigDecimal.ZERO);
+            if (user == null) continue;
+            UUID id = user.getId();
+            userById.put(id, user);
             BigDecimal distance = contrib.getDistanceMiles() != null ? contrib.getDistanceMiles() : BigDecimal.ZERO;
-            userTotals.put(user, current.add(distance));
+            byUserId.merge(id, distance, BigDecimal::add);
         }
 
-        List<Map.Entry<User, BigDecimal>> sorted = userTotals.entrySet().stream()
+        List<Map.Entry<UUID, BigDecimal>> sorted = byUserId.entrySet().stream()
             .sorted((a, b) -> b.getValue().compareTo(a.getValue()))
             .toList();
 
         List<LeaderboardEntry> result = new ArrayList<>();
-        for (int i = 0; i < sorted.size(); i++) {
+        int cap = maxEntries < 1 ? Integer.MAX_VALUE : maxEntries;
+        for (int i = 0; i < Math.min(sorted.size(), cap); i++) {
+            User u = userById.get(sorted.get(i).getKey());
+            if (u == null) continue;
             LeaderboardEntry e = new LeaderboardEntry();
             e.rank = i + 1;
-            e.user = com.runclub.api.model.User.from(sorted.get(i).getKey());
+            e.user = com.runclub.api.model.User.from(u);
             e.totalDistanceMiles = sorted.get(i).getValue();
             result.add(e);
         }

@@ -99,7 +99,8 @@ public class ClubGoalController {
     public ApiList<LeaderboardEntry> getLeaderboard(
             @PathVariable UUID clubId,
             @PathVariable UUID goalId) {
-        List<LeaderboardEntry> entries = goalService.getGoalLeaderboard(goalId);
+        List<LeaderboardEntry> entries = goalService.getGoalLeaderboardForClub(
+            clubId, goalId, 10_000);
         return ApiList.of(entries, false, entries.size(),
             "/v1/clubs/" + clubId + "/goals/" + goalId + "/leaderboard");
     }
