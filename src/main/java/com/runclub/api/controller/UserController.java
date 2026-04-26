@@ -45,7 +45,8 @@ public class UserController {
                           ActivityService activityService,
                           FollowService followService,
                           AvatarUploadService avatarUploadService,
-                          UserProvisioningService userProvisioningService) {
+                          UserProvisioningService userProvisioningService,
+                          StravaActivitySyncService stravaActivitySyncService) {
         this.userRepository = userRepository;
         this.userProfileService = userProfileService;
         this.activityService = activityService;
