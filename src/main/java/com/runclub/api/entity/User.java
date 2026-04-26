@@ -15,7 +15,7 @@ public class User {
     @Id
     private UUID id;
 
-    @Column(unique = true, nullable = false)
+    @Column(name = "auth0_id", unique = true, nullable = false)
     private String auth0Id;
 
     @Column(unique = true, nullable = false)
