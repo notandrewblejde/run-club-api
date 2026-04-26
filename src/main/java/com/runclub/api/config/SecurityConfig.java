@@ -25,6 +25,7 @@ public class SecurityConfig {
             .addFilterBefore(jwtAuthLoggingFilter, UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(HttpMethod.GET, "/health", "/api/health").permitAll()
+                .requestMatchers(HttpMethod.DELETE, "/v1/admin/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers(HttpMethod.POST, "/v1/strava/webhook").permitAll()
                 .requestMatchers(HttpMethod.GET, "/v1/strava/webhook").permitAll()
