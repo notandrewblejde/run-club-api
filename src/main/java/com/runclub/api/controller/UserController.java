@@ -15,6 +15,8 @@ import com.runclub.api.service.UserProvisioningService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -122,21 +124,31 @@ public class UserController {
     @GetMapping
     public ApiList<com.runclub.api.model.User> search(
             @RequestParam("q") String query,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit) {
-        String q = query == null ? "" : query.trim().toLowerCase();
+        String q = query == null ? "" : query.trim();
         if (q.isEmpty()) {
             return ApiList.of(List.of(), false, 0, "/v1/users");
         }
-        int cap = Math.min(limit, 50);
-        List<com.runclub.api.model.User> results = userRepository.findAll().stream()
-            .filter(u -> {
-                String name = u.getDisplayName() == null ? "" : u.getDisplayName().toLowerCase();
-                String email = u.getEmail() == null ? "" : u.getEmail().toLowerCase();
-                return name.contains(q) || email.contains(q);
-            })
-            .limit(cap)
+        Pageable pageable = PageRequest.of(Math.max(0, page - 1), Math.min(limit, 50));
+        Page<User> hits = userRepository.searchByDisplayNamePrefix(q, pageable);
+        List<com.runclub.api.model.User> data = hits.getContent().stream()
             .map(com.runclub.api.model.User::from)
             .toList();
-        return ApiList.of(results, false, results.size(), "/v1/users");
+        return ApiList.of(data, hits.hasNext(), hits.getTotalElements(), "/v1/users");
+    }
+
+    /**
+     * "People you may know" for the authenticated viewer. Friends-of-friends
+     * with a recent-public-users fallback for brand-new accounts. See
+     * {@link com.runclub.api.service.FollowService#getSuggestedUsers}.
+     */
+    @GetMapping("/suggested")
+    public ApiList<com.runclub.api.model.User> suggested(Authentication authentication) {
+        UUID viewerId = Auth.userId(authentication);
+        List<com.runclub.api.model.User> data = followService.getSuggestedUsers(viewerId).stream()
+            .map(com.runclub.api.model.User::from)
+            .toList();
+        return ApiList.of(data, false, data.size(), "/v1/users/suggested");
     }
 }

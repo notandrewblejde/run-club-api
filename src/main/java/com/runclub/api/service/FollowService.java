@@ -167,4 +167,24 @@ public class FollowService {
             .orElseThrow(() -> ApiException.notFound("user"));
         return followRepository.countByFollowerAndStatus(user, STATUS_ACCEPTED);
     }
+
+    /**
+     * "People you may know" for the viewer. v1 ranking: friends-of-friends
+     * via the accepted-follow graph, ordered by overlap. When the viewer has
+     * no second-degree connections (e.g. brand-new account), falls back to the
+     * most-recently-created public users.
+     *
+     * Returned users preserve the suggestion order. Capped at 20.
+     */
+    public java.util.List<User> getSuggestedUsers(UUID viewerId) {
+        Pageable cap = PageRequest.of(0, 20);
+        java.util.List<UUID> ids = followRepository.findFriendsOfFriendsIds(viewerId, cap);
+        if (!ids.isEmpty()) {
+            // findAllById doesn't preserve the order we need; rehydrate then re-sort.
+            java.util.Map<UUID, User> byId = userRepository.findAllById(ids).stream()
+                .collect(java.util.stream.Collectors.toMap(User::getId, u -> u));
+            return ids.stream().map(byId::get).filter(java.util.Objects::nonNull).toList();
+        }
+        return userRepository.findRecentPublicUsersExcluding(viewerId, cap);
+    }
 }
