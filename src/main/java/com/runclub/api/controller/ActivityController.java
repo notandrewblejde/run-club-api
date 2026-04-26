@@ -4,6 +4,7 @@ import com.runclub.api.api.ApiList;
 import com.runclub.api.api.Auth;
 import com.runclub.api.dto.UpdateActivityRequest;
 import com.runclub.api.model.Activity;
+import com.runclub.api.api.ApiException;
 import com.runclub.api.service.ActivityService;
 import com.runclub.api.service.ActivityUploadService;
 import com.runclub.api.service.AthleteIntelligenceService;
@@ -77,7 +78,22 @@ public class ActivityController {
         UUID userId = Auth.userId(authentication);
         // Authorization piggybacks on getActivity (throws 404/403 if needed).
         activityService.getActivity(activityId, userId);
-        String summary = athleteIntelligenceService.generateActivitySummary(activityId);
+        String summary = athleteIntelligenceService.getOrCreateActivitySummary(activityId);
         return ResponseEntity.ok(Map.of("activity_id", activityId, "summary", summary));
+    }
+
+    @PostMapping("/{activityId}/coach/chat")
+    public ResponseEntity<Map<String, String>> coachChat(
+            @PathVariable UUID activityId,
+            @RequestBody(required = false) Map<String, String> body,
+            Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        activityService.getActivity(activityId, userId);
+        String message = body == null ? null : body.get("message");
+        if (message == null || message.isBlank()) {
+            throw ApiException.badRequest("message is required");
+        }
+        String reply = athleteIntelligenceService.coachChatAboutActivity(activityId, userId, message.trim());
+        return ResponseEntity.ok(Map.of("reply", reply));
     }
 }

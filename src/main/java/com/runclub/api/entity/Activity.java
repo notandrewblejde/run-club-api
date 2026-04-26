@@ -78,6 +78,10 @@ public class Activity {
     @Column(name = "comment_count")
     private Integer commentCount = 0;
 
+    /** Short coach insight from activity telemetry; generated async after Strava import. */
+    @Column(name = "ai_coach_summary", columnDefinition = "TEXT")
+    private String aiCoachSummary;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -146,6 +150,9 @@ public class Activity {
 
     public Integer getCommentCount() { return commentCount; }
     public void setCommentCount(Integer commentCount) { this.commentCount = commentCount; }
+
+    public String getAiCoachSummary() { return aiCoachSummary; }
+    public void setAiCoachSummary(String aiCoachSummary) { this.aiCoachSummary = aiCoachSummary; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

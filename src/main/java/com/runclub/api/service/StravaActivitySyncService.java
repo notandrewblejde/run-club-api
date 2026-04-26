@@ -15,6 +15,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -39,15 +40,24 @@ public class StravaActivitySyncService {
     private final ActivityRepository activityRepository;
     private final UserRepository userRepository;
     private final GoalAttributionService goalAttributionService;
+    private final AthleteIntelligenceService athleteIntelligenceService;
+    private final TrainingGoalService trainingGoalService;
+    private final NotificationService notificationService;
 
     public StravaActivitySyncService(StravaApiService stravaApiService,
                                      ActivityRepository activityRepository,
                                      UserRepository userRepository,
-                                     GoalAttributionService goalAttributionService) {
+                                     GoalAttributionService goalAttributionService,
+                                     AthleteIntelligenceService athleteIntelligenceService,
+                                     TrainingGoalService trainingGoalService,
+                                     NotificationService notificationService) {
         this.stravaApiService = stravaApiService;
         this.activityRepository = activityRepository;
         this.userRepository = userRepository;
         this.goalAttributionService = goalAttributionService;
+        this.athleteIntelligenceService = athleteIntelligenceService;
+        this.trainingGoalService = trainingGoalService;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -190,6 +200,13 @@ public class StravaActivitySyncService {
         // Best-effort: attribute to any active club goals this user belongs to.
         // Failures are logged inside the attribution service and don't fail the sync.
         goalAttributionService.attributeToActiveGoals(saved);
+        UUID savedId = saved.getId();
+        UUID ownerId = user.getId();
+        CompletableFuture.runAsync(() -> {
+            athleteIntelligenceService.maybeGenerateCoachSummaryAsync(savedId);
+            trainingGoalService.refreshAfterActivitySync(ownerId);
+            notificationService.createActivityArrivedNotificationAsync(ownerId, savedId);
+        });
         return saved;
     }
 

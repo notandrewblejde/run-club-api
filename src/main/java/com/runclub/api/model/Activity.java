@@ -91,6 +91,10 @@ public class Activity {
     @JsonProperty("personal_record")
     public boolean personalRecord;
 
+    /** Coach insight from telemetry; null until generated after sync. */
+    @JsonProperty("ai_coach_summary")
+    public String aiCoachSummary;
+
     @JsonProperty("kudoed_by_viewer")
     public Boolean kudoedByViewer;
 
@@ -132,6 +136,7 @@ public class Activity {
         d.kudosCount = a.getKudosCount() == null ? 0 : a.getKudosCount();
         d.commentCount = a.getCommentCount() == null ? 0 : a.getCommentCount();
         d.personalRecord = Boolean.TRUE.equals(a.getIsPersonalRecord());
+        d.aiCoachSummary = a.getAiCoachSummary();
         d.created = a.getCreatedAt() != null ? a.getCreatedAt().toEpochSecond(ZoneOffset.UTC) : null;
         return d;
     }

@@ -57,6 +57,8 @@ Response:
 
 Migrations run automatically on startup via Flyway. Located in `src/main/resources/db/migration/`.
 
+Order is lexical by version: e.g. `V10__...sql` runs before `V11__training_profiles_and_notifications.sql`, which adds `user_training_profiles`, `user_daily_training_plans`, and `user_notifications` (including a partial unique index for activity dedupe on PostgreSQL).
+
 ## API Security
 
 - Public endpoints: `GET /health`, `POST /v1/strava/webhook`
@@ -106,6 +108,19 @@ src/
 | STRAVA_CLIENT_SECRET | Strava app secret | - |
 | AWS_REGION | AWS region | us-east-1 |
 | S3_BUCKET | S3 bucket for photos | run-club-photos |
+| ANTHROPIC_API_KEY | Optional. Enables Claude for activity coach summaries, training-goal interpretation, daily plan JSON, and Strava-sync notification copy. If unset, those features use short deterministic fallbacks. Can also be set as `anthropic.api-key` in `application.properties`. |
+
+## AI (Anthropic)
+
+Coach summaries, `/v1/me/training-goal` interpretation, daily training JSON, and post-sync in-app notifications call the Anthropic Messages API when `ANTHROPIC_API_KEY` is set. Copy is wellness-oriented suggestions only, not medical advice.
+
+**Training goal feedback** (stored in Postgres, table `user_training_goal_feedback`):
+
+- `GET /v1/me/training-goal/feedback?page=&limit=` — paged from **newest** (page 1 = most recent block); `has_more` indicates older messages.
+- `POST /v1/me/training-goal/feedback` — add a user note; server stores the coach reply and rebuilds interpretation + daily plan.
+- `DELETE /v1/me/training-goal/feedback` — clear all goal-feedback rows for the user, then re-run interpretation (goal text is unchanged).
+
+On each refresh, the latest transcript (up to a capped length) is **passed into the interpretation prompt**—this is not Anthropic’s hosted “memory” product. Prompts also instruct the model to stay on running/training topics and refuse obvious off-topic or “ignore previous instructions” style requests (e.g. unrelated recipes).
 
 ## Deployment
 
