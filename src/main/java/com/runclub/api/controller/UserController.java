@@ -11,6 +11,7 @@ import com.runclub.api.service.ActivityService;
 import com.runclub.api.service.AvatarUploadService;
 import com.runclub.api.service.FollowService;
 import com.runclub.api.service.UserProfileService;
+import com.runclub.api.service.UserProvisioningService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -20,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -33,32 +33,30 @@ public class UserController {
     private final ActivityService activityService;
     private final FollowService followService;
     private final AvatarUploadService avatarUploadService;
+    private final UserProvisioningService userProvisioningService;
 
     public UserController(UserRepository userRepository,
                           UserProfileService userProfileService,
                           ActivityService activityService,
                           FollowService followService,
-                          AvatarUploadService avatarUploadService) {
+                          AvatarUploadService avatarUploadService,
+                          UserProvisioningService userProvisioningService) {
         this.userRepository = userRepository;
         this.userProfileService = userProfileService;
         this.activityService = activityService;
         this.followService = followService;
         this.avatarUploadService = avatarUploadService;
+        this.userProvisioningService = userProvisioningService;
     }
 
     @GetMapping("/me")
     public UserProfile getMe(Authentication authentication) {
+        // The UserProvisioningFilter has already JIT-created this row for any
+        // authenticated request, so this is a guaranteed-present lookup. We
+        // still call the service rather than findByAuth0Id directly to keep
+        // a single source of truth for provisioning semantics.
         Jwt jwt = (Jwt) authentication.getPrincipal();
-        String auth0Id = jwt.getClaimAsString("sub");
-        User user = userRepository.findByAuth0Id(auth0Id).orElseGet(() -> {
-            User u = new User();
-            u.setAuth0Id(auth0Id);
-            u.setEmail(Optional.ofNullable(jwt.getClaimAsString("email")).orElse(auth0Id + "@unknown"));
-            u.setDisplayName(jwt.getClaimAsString("name"));
-            u.setProfilePicUrl(jwt.getClaimAsString("picture"));
-            u.setId(UUID.nameUUIDFromBytes(auth0Id.getBytes()));
-            return userRepository.save(u);
-        });
+        User user = userProvisioningService.getOrProvision(jwt);
         return userProfileService.getProfile(user.getId(), user.getId());
     }
 
