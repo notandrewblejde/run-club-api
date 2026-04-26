@@ -56,6 +56,7 @@ public class StravaActivityResponse {
     @JsonProperty("pr_count")
     private Integer prCount;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private List<Photo> photos;
 
     public Long getId() { return id; }
