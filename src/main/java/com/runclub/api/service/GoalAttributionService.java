@@ -1,6 +1,7 @@
 package com.runclub.api.service;
 
 import com.runclub.api.entity.Activity;
+import com.runclub.api.entity.Club;
 import com.runclub.api.entity.ClubGoal;
 import com.runclub.api.entity.ClubMembership;
 import com.runclub.api.entity.GoalContribution;
@@ -8,12 +9,15 @@ import com.runclub.api.entity.User;
 import com.runclub.api.repository.ActivityRepository;
 import com.runclub.api.repository.ClubGoalRepository;
 import com.runclub.api.repository.ClubMembershipRepository;
+import com.runclub.api.repository.ClubRepository;
 import com.runclub.api.repository.GoalContributionRepository;
+import com.runclub.api.repository.UserRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -27,6 +31,10 @@ import java.util.logging.Logger;
  * active club goals where the user is a member and the activity's date falls
  * inside the goal's window. Idempotent — duplicate calls per activity are
  * ignored thanks to the unique (goal_id, activity_id) constraint.
+ *
+ * <p>Goal credit uses only each goal's {@code [startDate, endDate]} and the
+ * activity's date — never {@code club_memberships.joined_at}. Late joiners get
+ * full-window credit via {@link #backfillClubGoalsForNewMemberAsync}.
  */
 @Service
 public class GoalAttributionService {
@@ -36,15 +44,21 @@ public class GoalAttributionService {
     private final ClubGoalRepository goalRepository;
     private final GoalContributionRepository contributionRepository;
     private final ActivityRepository activityRepository;
+    private final ClubRepository clubRepository;
+    private final UserRepository userRepository;
 
     public GoalAttributionService(ClubMembershipRepository membershipRepository,
                                   ClubGoalRepository goalRepository,
                                   GoalContributionRepository contributionRepository,
-                                  ActivityRepository activityRepository) {
+                                  ActivityRepository activityRepository,
+                                  ClubRepository clubRepository,
+                                  UserRepository userRepository) {
         this.membershipRepository = membershipRepository;
         this.goalRepository = goalRepository;
         this.contributionRepository = contributionRepository;
         this.activityRepository = activityRepository;
+        this.clubRepository = clubRepository;
+        this.userRepository = userRepository;
     }
 
     public void attributeToActiveGoals(Activity activity) {
@@ -85,6 +99,114 @@ public class GoalAttributionService {
     }
 
     /**
+     * After a user joins (or is invited into) a club, credit their already-synced
+     * activities toward every <em>active</em> club goal whose date window contains
+     * each activity. Join time does not clip the window — a member who joins halfway
+     * through still gets the full goal period for metrics.
+     */
+    @Async
+    @Transactional
+    public void backfillClubGoalsForNewMemberAsync(UUID userId, UUID clubId) {
+        User user = userRepository.findById(userId).orElse(null);
+        Club club = clubRepository.findById(clubId).orElse(null);
+        if (user == null || club == null) return;
+
+        List<ClubGoal> goals = goalRepository.findByClubAndEndDateGreaterThanEqual(club, LocalDate.now());
+        int totalCreated = 0;
+        for (ClubGoal goal : goals) {
+            totalCreated += backfillGoalContributionsForMember(goal, user);
+        }
+        if (totalCreated > 0) {
+            logger.info("New-member goal backfill: " + totalCreated + " contribution(s) for user "
+                + userId + " in club " + clubId);
+        }
+    }
+
+    private int backfillGoalContributionsForMember(ClubGoal goal, User user) {
+        if (goal.getStartDate() == null || goal.getEndDate() == null) return 0;
+        LocalDateTime startInclusive = goal.getStartDate().atStartOfDay();
+        LocalDateTime endExclusive = goal.getEndDate().plusDays(1).atStartOfDay();
+
+        List<Activity> activities = activityRepository
+            .findByUserAndStartDateBetween(user, startInclusive, endExclusive);
+        int created = 0;
+        for (Activity a : activities) {
+            if (contributionRepository.findByGoalAndActivity_Id(goal, a.getId()).isPresent()) {
+                continue;
+            }
+            try {
+                GoalContribution c = new GoalContribution();
+                c.setGoal(goal);
+                c.setUser(user);
+                c.setActivity(a);
+                c.setDistanceMiles(a.getDistanceMiles());
+                c.setContributedAt(LocalDateTime.now());
+                contributionRepository.save(c);
+                created++;
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "New-member goal backfill failed for activity "
+                    + a.getId() + " → goal " + goal.getId(), e);
+            }
+        }
+        return created;
+    }
+
+    /**
+     * Remove contributions whose activity date falls outside the goal's
+     * current [startDate, endDate] window. Used when goal dates are edited
+     * (before async recompute) and defensively inside async recompute.
+     */
+    @Transactional
+    public void pruneContributionsOutsideGoalWindow(ClubGoal goal) {
+        LocalDate start = goal.getStartDate();
+        LocalDate end = goal.getEndDate();
+        if (start == null || end == null) return;
+        List<GoalContribution> list = contributionRepository.findByGoal(goal);
+        for (GoalContribution c : list) {
+            if (c.getActivity() == null || c.getActivity().getStartDate() == null) {
+                continue;
+            }
+            LocalDate activityDate = c.getActivity().getStartDate().toLocalDate();
+            if (activityDate.isBefore(start) || activityDate.isAfter(end)) {
+                contributionRepository.delete(c);
+            }
+        }
+    }
+
+    /**
+     * After goal dates change: prune stragglers, align stored miles with current
+     * activity rows, then backfill any missing attributions in the window.
+     * Runs async and should be scheduled after the goal update transaction commits
+     * so the worker sees the final dates.
+     */
+    @Async
+    @Transactional
+    public void recomputeGoalContributionsAfterDateEditAsync(UUID goalId) {
+        ClubGoal goal = goalRepository.findById(goalId).orElse(null);
+        if (goal == null || goal.getStartDate() == null || goal.getEndDate() == null) return;
+
+        pruneContributionsOutsideGoalWindow(goal);
+        syncContributionDistancesFromActivities(goal);
+
+        if (!goal.getStartDate().isAfter(LocalDate.now())) {
+            backfillContributionsForGoal(goal);
+        }
+    }
+
+    private void syncContributionDistancesFromActivities(ClubGoal goal) {
+        for (GoalContribution c : contributionRepository.findByGoal(goal)) {
+            Activity a = c.getActivity();
+            if (a == null) continue;
+            BigDecimal fromActivity = a.getDistanceMiles();
+            if (fromActivity == null) continue;
+            if (c.getDistanceMiles() == null || c.getDistanceMiles().compareTo(fromActivity) != 0) {
+                c.setDistanceMiles(fromActivity);
+                contributionRepository.save(c);
+            }
+        }
+    }
+
+    /**
      * Backfill contributions for a freshly-created goal whose window includes
      * dates in the past. Walks every member's already-synced activities inside
      * [startDate, endDate] and credits any that aren't already attributed.
@@ -99,13 +221,13 @@ public class GoalAttributionService {
     public void backfillContributionsAsync(UUID goalId) {
         ClubGoal goal = goalRepository.findById(goalId).orElse(null);
         if (goal == null || goal.getStartDate() == null || goal.getEndDate() == null) return;
+        backfillContributionsForGoal(goal);
+    }
 
+    private void backfillContributionsForGoal(ClubGoal goal) {
         LocalDateTime startInclusive = goal.getStartDate().atStartOfDay();
-        // End-exclusive at start-of-next-day so any time on the end date counts.
         LocalDateTime endExclusive = goal.getEndDate().plusDays(1).atStartOfDay();
 
-        // Load every member of the club; cap at 200 since the live-attribution
-        // path uses the same number. Realistic clubs are far smaller.
         List<ClubMembership> memberships = membershipRepository
             .findByClub(goal.getClub(), PageRequest.of(0, 200))
             .getContent();

@@ -25,4 +25,6 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID> {
      */
     List<Activity> findByUserInAndStartDateBetween(
         List<User> users, LocalDateTime start, LocalDateTime end);
+
+    List<Activity> findByUserAndStartDateBetween(User user, LocalDateTime start, LocalDateTime end);
 }

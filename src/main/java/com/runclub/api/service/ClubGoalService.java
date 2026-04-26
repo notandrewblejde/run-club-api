@@ -5,9 +5,13 @@ import com.runclub.api.entity.*;
 import com.runclub.api.model.GoalProgress;
 import com.runclub.api.model.LeaderboardEntry;
 import com.runclub.api.repository.*;
+import com.runclub.api.dto.UpdateGoalRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -45,15 +49,7 @@ public class ClubGoalService {
                                LocalDate startDate, LocalDate endDate, UUID createdByUserId) {
         Club club = clubRepository.findById(clubId)
             .orElseThrow(() -> ApiException.notFound("club"));
-        User creator = userRepository.findById(createdByUserId)
-            .orElseThrow(() -> ApiException.notFound("user"));
-
-        ClubMembership membership = clubMembershipRepository.findByClubAndUser(club, creator)
-            .orElseThrow(() -> ApiException.forbidden("User is not a member of this club"));
-
-        if (!("owner".equals(membership.getRole()) || "admin".equals(membership.getRole()))) {
-            throw ApiException.forbidden("Only club admins and owners can create goals");
-        }
+        assertAdminOrOwner(club, createdByUserId);
 
         ClubGoal goal = new ClubGoal();
         goal.setClub(club);
@@ -66,13 +62,12 @@ public class ClubGoalService {
 
         ClubGoal saved = clubGoalRepository.save(goal);
 
-        // If the goal's window opens in the past or today, immediately credit
-        // every member's already-synced activities that fall in [start, end].
-        // Future-dated goals don't need backfill — live attribution will pick
-        // up activities as they sync. Done async so big clubs don't block the
-        // create call; idempotent so a no-op re-run is safe.
+        // If the goal's window opens in the past or today, credit every member's
+        // already-synced activities in [start, end]. Async after commit so the
+        // worker always sees the persisted goal row.
         if (startDate != null && !startDate.isAfter(LocalDate.now())) {
-            goalAttributionService.backfillContributionsAsync(saved.getId());
+            final UUID newGoalId = saved.getId();
+            runAfterCommit(() -> goalAttributionService.backfillContributionsAsync(newGoalId));
         }
 
         return saved;
@@ -170,5 +165,94 @@ public class ClubGoalService {
         Club club = clubRepository.findById(clubId)
             .orElseThrow(() -> ApiException.notFound("club"));
         return clubGoalRepository.findByClub(club, pageable);
+    }
+
+    @Transactional
+    public ClubGoal updateGoal(UUID clubId, UUID goalId, UpdateGoalRequest body, UUID userId) {
+        ClubGoal goal = clubGoalRepository.findById(goalId)
+            .orElseThrow(() -> ApiException.notFound("goal"));
+        if (!goal.getClub().getId().equals(clubId)) {
+            throw ApiException.notFound("goal");
+        }
+        assertAdminOrOwner(goal.getClub(), userId);
+
+        boolean any =
+            (body.name != null && !body.name.isBlank())
+                || body.targetDistanceMiles != null
+                || (body.startDate != null && !body.startDate.isBlank())
+                || (body.endDate != null && !body.endDate.isBlank());
+        if (!any) {
+            throw ApiException.badRequest("Provide at least one field to update");
+        }
+
+        LocalDate oldStart = goal.getStartDate();
+        LocalDate oldEnd = goal.getEndDate();
+
+        LocalDate newStart = oldStart;
+        LocalDate newEnd = oldEnd;
+        if (body.startDate != null && !body.startDate.isBlank()) {
+            newStart = LocalDate.parse(body.startDate);
+        }
+        if (body.endDate != null && !body.endDate.isBlank()) {
+            newEnd = LocalDate.parse(body.endDate);
+        }
+        if (newEnd.isBefore(newStart)) {
+            throw ApiException.badRequest("End date must be on or after start date");
+        }
+
+        if (body.name != null && !body.name.isBlank()) {
+            goal.setName(body.name.trim());
+        }
+        if (body.targetDistanceMiles != null) {
+            goal.setTargetDistanceMiles(body.targetDistanceMiles);
+        }
+        goal.setStartDate(newStart);
+        goal.setEndDate(newEnd);
+        goal.setUpdatedAt(LocalDateTime.now());
+
+        ClubGoal saved = clubGoalRepository.save(goal);
+
+        boolean datesChanged = !oldStart.equals(newStart) || !oldEnd.equals(newEnd);
+        if (datesChanged) {
+            goalAttributionService.pruneContributionsOutsideGoalWindow(saved);
+            final UUID gid = saved.getId();
+            runAfterCommit(() -> goalAttributionService.recomputeGoalContributionsAfterDateEditAsync(gid));
+        }
+
+        return saved;
+    }
+
+    @Transactional
+    public void deleteGoal(UUID clubId, UUID goalId, UUID userId) {
+        ClubGoal goal = clubGoalRepository.findById(goalId)
+            .orElseThrow(() -> ApiException.notFound("goal"));
+        if (!goal.getClub().getId().equals(clubId)) {
+            throw ApiException.notFound("goal");
+        }
+        assertAdminOrOwner(goal.getClub(), userId);
+        clubGoalRepository.delete(goal);
+    }
+
+    private void assertAdminOrOwner(Club club, UUID userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> ApiException.notFound("user"));
+        ClubMembership membership = clubMembershipRepository.findByClubAndUser(club, user)
+            .orElseThrow(() -> ApiException.forbidden("User is not a member of this club"));
+        if (!("owner".equals(membership.getRole()) || "admin".equals(membership.getRole()))) {
+            throw ApiException.forbidden("Only club admins and owners can manage goals");
+        }
+    }
+
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 }

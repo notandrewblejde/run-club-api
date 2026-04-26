@@ -3,6 +3,7 @@ package com.runclub.api.controller;
 import com.runclub.api.api.ApiList;
 import com.runclub.api.api.Auth;
 import com.runclub.api.dto.CreateGoalRequest;
+import com.runclub.api.dto.UpdateGoalRequest;
 import com.runclub.api.model.Goal;
 import com.runclub.api.model.GoalProgress;
 import com.runclub.api.model.LeaderboardEntry;
@@ -65,6 +66,26 @@ public class ClubGoalController {
         Page<com.runclub.api.entity.ClubGoal> goals = goalService.getActiveGoals(clubId, pageable);
         return ApiList.of(goals.getContent().stream().map(Goal::from).toList(),
             goals.hasNext(), goals.getTotalElements(), "/v1/clubs/" + clubId + "/goals/active");
+    }
+
+    @PatchMapping("/{goalId}")
+    public Goal updateGoal(
+            @PathVariable UUID clubId,
+            @PathVariable UUID goalId,
+            @Valid @RequestBody UpdateGoalRequest body,
+            Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        return Goal.from(goalService.updateGoal(clubId, goalId, body, userId));
+    }
+
+    @DeleteMapping("/{goalId}")
+    public ResponseEntity<Void> deleteGoal(
+            @PathVariable UUID clubId,
+            @PathVariable UUID goalId,
+            Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        goalService.deleteGoal(clubId, goalId, userId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{goalId}/progress")

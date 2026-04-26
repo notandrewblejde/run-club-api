@@ -10,6 +10,8 @@ import com.runclub.api.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,11 +23,16 @@ public class ClubService {
     private final ClubRepository clubRepository;
     private final ClubMembershipRepository membershipRepository;
     private final UserRepository userRepository;
+    private final GoalAttributionService goalAttributionService;
 
-    public ClubService(ClubRepository clubRepository, ClubMembershipRepository membershipRepository, UserRepository userRepository) {
+    public ClubService(ClubRepository clubRepository,
+                       ClubMembershipRepository membershipRepository,
+                       UserRepository userRepository,
+                       GoalAttributionService goalAttributionService) {
         this.clubRepository = clubRepository;
         this.membershipRepository = membershipRepository;
         this.userRepository = userRepository;
+        this.goalAttributionService = goalAttributionService;
     }
 
     public Club createClub(String name, String description, String privacyLevel, UUID creatorId) {
@@ -87,7 +94,11 @@ public class ClubService {
         membership.setRole("member");
         membership.setJoinedAt(LocalDateTime.now());
 
-        return membershipRepository.save(membership);
+        ClubMembership saved = membershipRepository.save(membership);
+        final UUID newMemberId = user.getId();
+        final UUID clubUuid = club.getId();
+        runAfterCommit(() -> goalAttributionService.backfillClubGoalsForNewMemberAsync(newMemberId, clubUuid));
+        return saved;
     }
 
     public ClubMembership inviteUserToClub(UUID clubId, UUID invitedUserId, UUID invitedByUserId) {
@@ -114,7 +125,11 @@ public class ClubService {
         membership.setRole("member");
         membership.setJoinedAt(LocalDateTime.now());
 
-        return membershipRepository.save(membership);
+        ClubMembership saved = membershipRepository.save(membership);
+        final UUID newMemberId = invitedUser.getId();
+        final UUID clubUuid = club.getId();
+        runAfterCommit(() -> goalAttributionService.backfillClubGoalsForNewMemberAsync(newMemberId, clubUuid));
+        return saved;
     }
 
     public ClubMembership updateMemberRole(UUID clubId, UUID userId, String newRole, UUID updatedByUserId) {
@@ -185,5 +200,18 @@ public class ClubService {
 
     private static boolean isAdminOrOwner(ClubMembership m) {
         return "owner".equals(m.getRole()) || "admin".equals(m.getRole());
+    }
+
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 }

@@ -22,6 +22,7 @@ public class ClubMembership {
     @JsonProperty("role")
     public String role; // "owner" | "admin" | "member"
 
+    /** Unix seconds; informational only — goal metrics use the goal date window, not join time. */
     @JsonProperty("joined")
     public Long joined;
 
