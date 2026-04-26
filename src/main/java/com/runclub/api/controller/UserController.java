@@ -11,6 +11,7 @@ import com.runclub.api.service.ActivityService;
 import com.runclub.api.service.AvatarUploadService;
 import com.runclub.api.service.FollowService;
 import com.runclub.api.service.UserProfileService;
+import com.runclub.api.service.StravaActivitySyncService;
 import com.runclub.api.service.UserProvisioningService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,6 +35,7 @@ public class UserController {
     private final UserProfileService userProfileService;
     private final ActivityService activityService;
     private final FollowService followService;
+    private final StravaActivitySyncService stravaActivitySyncService;
     private final AvatarUploadService avatarUploadService;
     private final UserProvisioningService userProvisioningService;
 
@@ -150,5 +152,12 @@ public class UserController {
             .map(com.runclub.api.model.User::from)
             .toList();
         return ApiList.of(data, false, data.size(), "/v1/users/suggested");
+    }
+
+    @PostMapping("/me/strava/deep-sync")
+    public ResponseEntity<?> deepSync(Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        stravaActivitySyncService.deepSyncRecentActivitiesAsync(userId);
+        return ResponseEntity.accepted().body("{\"message\": \"Deep sync started — GPS data will populate shortly\"}");
     }
 }

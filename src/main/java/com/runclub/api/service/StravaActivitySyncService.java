@@ -192,4 +192,46 @@ public class StravaActivitySyncService {
         goalAttributionService.attributeToActiveGoals(saved);
         return saved;
     }
+
+    /**
+     * Deep-syncs all activities for a user by fetching each individually from Strava.
+     * This gets full-resolution polyline (not just summary_polyline) and complete stats.
+     * Rate-limited: 200ms delay between requests, max 50 activities.
+     */
+    @Async
+    public void deepSyncRecentActivitiesAsync(UUID userId) {
+        try {
+            User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+            if (user.getStravaAccessToken() == null) {
+                logger.warning("Deep sync skipped: user " + userId + " has no Strava token");
+                return;
+            }
+
+            // Get list of recent activities (max 50 for rate limit safety)
+            List<StravaActivityResponse> list = stravaApiService.listAthleteActivities(
+                user, null, 1, 50);
+
+            int updated = 0;
+            for (StravaActivityResponse summary : list) {
+                if (!isRunningActivity(summary)) continue;
+                try {
+                    // Fetch full detail to get complete polyline
+                    StravaActivityResponse detail = stravaApiService.fetchActivity(
+                        user, summary.getId());
+                    if (detail != null) {
+                        upsertFromStrava(user, detail);
+                        updated++;
+                    }
+                    Thread.sleep(200); // Respect Strava rate limit
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "Deep sync failed for activity "
+                        + summary.getId(), e);
+                }
+            }
+            logger.info("Deep sync complete for user " + userId + ": " + updated + " activities updated");
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Deep sync failed for user " + userId, e);
+        }
+    }
 }
