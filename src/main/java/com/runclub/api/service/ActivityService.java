@@ -74,6 +74,10 @@ public class ActivityService {
             throw ApiException.forbidden("Only the activity owner can edit details");
         }
 
+        if (body.userNote == null && body.appPhotos == null) {
+            throw ApiException.badRequest("Provide user_note and/or app_photos");
+        }
+
         if (body.userNote != null) {
             String trimmed = body.userNote.trim();
             entity.setUserNote(trimmed.isEmpty() ? null : trimmed);
