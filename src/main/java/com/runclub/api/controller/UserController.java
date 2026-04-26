@@ -50,6 +50,7 @@ public class UserController {
         this.activityService = activityService;
         this.followService = followService;
         this.avatarUploadService = avatarUploadService;
+        this.stravaActivitySyncService = stravaActivitySyncService;
         this.userProvisioningService = userProvisioningService;
     }
 

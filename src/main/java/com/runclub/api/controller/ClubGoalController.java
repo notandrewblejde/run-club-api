@@ -29,9 +29,11 @@ import java.util.UUID;
 public class ClubGoalController {
 
     private final ClubGoalService goalService;
+    private final com.runclub.api.service.GoalAttributionService goalAttributionService;
 
-    public ClubGoalController(ClubGoalService goalService) {
+    public ClubGoalController(ClubGoalService goalService, com.runclub.api.service.GoalAttributionService goalAttributionService) {
         this.goalService = goalService;
+        this.goalAttributionService = goalAttributionService;
     }
 
     @PostMapping
