@@ -23,19 +23,22 @@ public class ClubGoalService {
     private final UserRepository userRepository;
     private final ActivityRepository activityRepository;
     private final ClubMembershipRepository clubMembershipRepository;
+    private final GoalAttributionService goalAttributionService;
 
     public ClubGoalService(ClubGoalRepository clubGoalRepository,
                           GoalContributionRepository goalContributionRepository,
                           ClubRepository clubRepository,
                           UserRepository userRepository,
                           ActivityRepository activityRepository,
-                          ClubMembershipRepository clubMembershipRepository) {
+                          ClubMembershipRepository clubMembershipRepository,
+                          GoalAttributionService goalAttributionService) {
         this.clubGoalRepository = clubGoalRepository;
         this.goalContributionRepository = goalContributionRepository;
         this.clubRepository = clubRepository;
         this.userRepository = userRepository;
         this.activityRepository = activityRepository;
         this.clubMembershipRepository = clubMembershipRepository;
+        this.goalAttributionService = goalAttributionService;
     }
 
     public ClubGoal createGoal(UUID clubId, String name, BigDecimal targetDistanceMiles,
@@ -61,7 +64,18 @@ public class ClubGoalService {
         goal.setCreatedAt(LocalDateTime.now());
         goal.setUpdatedAt(LocalDateTime.now());
 
-        return clubGoalRepository.save(goal);
+        ClubGoal saved = clubGoalRepository.save(goal);
+
+        // If the goal's window opens in the past or today, immediately credit
+        // every member's already-synced activities that fall in [start, end].
+        // Future-dated goals don't need backfill — live attribution will pick
+        // up activities as they sync. Done async so big clubs don't block the
+        // create call; idempotent so a no-op re-run is safe.
+        if (startDate != null && !startDate.isAfter(LocalDate.now())) {
+            goalAttributionService.backfillContributionsAsync(saved.getId());
+        }
+
+        return saved;
     }
 
     public GoalContribution recordContribution(UUID goalId, UUID userId, UUID activityId) {
