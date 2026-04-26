@@ -3,6 +3,7 @@ package com.runclub.api.controller;
 import com.runclub.api.api.ApiList;
 import com.runclub.api.api.Auth;
 import com.runclub.api.dto.CreateClubRequest;
+import com.runclub.api.dto.UpdateClubRequest;
 import com.runclub.api.model.Club;
 import com.runclub.api.model.ClubMembership;
 import com.runclub.api.model.LeaderboardEntry;
@@ -74,6 +75,16 @@ public class ClubController {
     @GetMapping("/{clubId}")
     public Club getClub(@PathVariable UUID clubId, Authentication authentication) {
         UUID userId = Auth.userId(authentication);
+        return clubService.getClub(clubId, userId);
+    }
+
+    @PatchMapping("/{clubId}")
+    public Club updateClub(
+            @PathVariable UUID clubId,
+            @Valid @RequestBody UpdateClubRequest body,
+            Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        clubService.updateClub(clubId, userId, body.name, body.description, body.privacyLevel);
         return clubService.getClub(clubId, userId);
     }
 

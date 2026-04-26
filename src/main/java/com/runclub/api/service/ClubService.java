@@ -101,6 +101,43 @@ public class ClubService {
         return saved;
     }
 
+    public Club updateClub(UUID clubId, UUID actorUserId, String name, String description, String privacyLevel) {
+        Club club = clubRepository.findById(clubId)
+            .orElseThrow(() -> ApiException.notFound("club"));
+        User actor = userRepository.findById(actorUserId)
+            .orElseThrow(() -> ApiException.notFound("user"));
+        ClubMembership actorMembership = membershipRepository.findByClubAndUser(club, actor)
+            .orElseThrow(() -> ApiException.forbidden("Only club admins and owners can edit this club"));
+        if (!isAdminOrOwner(actorMembership)) {
+            throw ApiException.forbidden("Only club admins and owners can edit this club");
+        }
+
+        boolean any = false;
+        if (name != null) {
+            String trimmed = name.trim();
+            if (trimmed.isEmpty()) {
+                throw ApiException.badRequest("name cannot be blank");
+            }
+            club.setName(trimmed);
+            any = true;
+        }
+        if (description != null) {
+            String trimmed = description.trim();
+            club.setDescription(trimmed.isEmpty() ? null : trimmed);
+            any = true;
+        }
+        if (privacyLevel != null) {
+            club.setPrivacyLevel(privacyLevel);
+            any = true;
+        }
+        if (!any) {
+            throw ApiException.badRequest("Provide at least one field to update");
+        }
+
+        club.setUpdatedAt(LocalDateTime.now());
+        return clubRepository.save(club);
+    }
+
     public ClubMembership inviteUserToClub(UUID clubId, UUID invitedUserId, UUID invitedByUserId) {
         Club club = clubRepository.findById(clubId)
             .orElseThrow(() -> ApiException.notFound("club"));

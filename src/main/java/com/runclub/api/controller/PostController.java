@@ -2,8 +2,10 @@ package com.runclub.api.controller;
 
 import com.runclub.api.api.Auth;
 import com.runclub.api.dto.CreatePostRequest;
+import com.runclub.api.dto.UpdatePostRequest;
 import com.runclub.api.model.Post;
 import com.runclub.api.service.PostService;
+import com.runclub.api.service.PostUploadService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -20,9 +22,11 @@ import java.util.UUID;
 public class PostController {
 
     private final PostService postService;
+    private final PostUploadService postUploadService;
 
-    public PostController(PostService postService) {
+    public PostController(PostService postService, PostUploadService postUploadService) {
         this.postService = postService;
+        this.postUploadService = postUploadService;
     }
 
     @PostMapping("/posts")
@@ -41,7 +45,34 @@ public class PostController {
             @PathVariable UUID clubId,
             @PathVariable UUID postId,
             Authentication authentication) {
-        postService.deletePost(postId, Auth.userId(authentication));
+        postService.deletePost(clubId, postId, Auth.userId(authentication));
+    }
+
+    @GetMapping("/posts/{postId}")
+    public Post getPost(
+            @PathVariable UUID clubId,
+            @PathVariable UUID postId) {
+        return Post.from(postService.getPost(clubId, postId));
+    }
+
+    @PatchMapping("/posts/{postId}")
+    public Post updatePost(
+            @PathVariable UUID clubId,
+            @PathVariable UUID postId,
+            @Valid @RequestBody UpdatePostRequest body,
+            Authentication authentication) {
+        com.runclub.api.entity.Post saved = postService.updatePost(
+            clubId, postId, Auth.userId(authentication), body.content, body.photos);
+        return Post.from(saved);
+    }
+
+    @PostMapping("/posts/presign")
+    public Map<String, String> presignPostPhotoUpload(
+            @PathVariable UUID clubId,
+            @RequestBody(required = false) Map<String, String> body,
+            Authentication authentication) {
+        String contentType = body == null ? null : body.get("content_type");
+        return postUploadService.presignPostPhotoUpload(clubId, Auth.userId(authentication), contentType);
     }
 
     /**

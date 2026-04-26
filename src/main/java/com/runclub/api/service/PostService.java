@@ -69,9 +69,42 @@ public class PostService {
         return postRepository.save(post);
     }
 
-    public void deletePost(UUID postId, UUID userId) {
+    public Post getPost(UUID clubId, UUID postId) {
         Post post = postRepository.findById(postId)
             .orElseThrow(() -> ApiException.notFound("post"));
+        if (!post.getClub().getId().equals(clubId)) {
+            throw ApiException.notFound("post");
+        }
+        return post;
+    }
+
+    public Post updatePost(UUID clubId, UUID postId, UUID userId, String content, String[] photoUrls) {
+        Post post = getPost(clubId, postId);
+        if (!post.getAuthor().getId().equals(userId)) {
+            throw ApiException.forbidden("Only post author can edit");
+        }
+        boolean any = false;
+        if (content != null) {
+            String trimmed = content.trim();
+            if (trimmed.isEmpty()) {
+                throw ApiException.badRequest("content cannot be blank");
+            }
+            post.setContent(trimmed);
+            any = true;
+        }
+        if (photoUrls != null) {
+            post.setPhotoUrls(photoUrls);
+            any = true;
+        }
+        if (!any) {
+            throw ApiException.badRequest("Provide content and/or photos");
+        }
+        post.setUpdatedAt(LocalDateTime.now());
+        return postRepository.save(post);
+    }
+
+    public void deletePost(UUID clubId, UUID postId, UUID userId) {
+        Post post = getPost(clubId, postId);
         if (!post.getAuthor().getId().equals(userId)) {
             throw ApiException.forbidden("Only post author can delete");
         }
