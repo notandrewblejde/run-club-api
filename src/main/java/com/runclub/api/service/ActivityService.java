@@ -19,26 +19,28 @@ public class ActivityService {
     private final ActivityRepository activityRepository;
     private final UserRepository userRepository;
     private final ActivityKudoRepository kudoRepository;
+    private final FollowService followService;
 
     public ActivityService(ActivityRepository activityRepository,
                            UserRepository userRepository,
-                           ActivityKudoRepository kudoRepository) {
+                           ActivityKudoRepository kudoRepository,
+                           FollowService followService) {
         this.activityRepository = activityRepository;
         this.userRepository = userRepository;
         this.kudoRepository = kudoRepository;
+        this.followService = followService;
     }
 
     public Page<com.runclub.api.entity.Activity> getUserActivities(UUID userId, int page, int limit) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> ApiException.notFound("user"));
-
         Pageable pageable = PageRequest.of(Math.max(0, page - 1), Math.min(limit, 100));
         return activityRepository.findByUserOrderByStartDateDesc(user, pageable);
     }
 
     /**
-     * Detailed view of a single activity. Returns the resource model with viewer-aware
-     * fields (kudoed_by_viewer, owned_by_viewer) populated.
+     * Detail view of one activity. Enforces privacy: a private profile's
+     * activities are only visible to the owner or accepted followers.
      */
     public Activity getActivity(UUID activityId, UUID requesterId) {
         com.runclub.api.entity.Activity entity = activityRepository.findById(activityId)
@@ -47,11 +49,16 @@ public class ActivityService {
         User requester = userRepository.findById(requesterId)
             .orElseThrow(() -> ApiException.notFound("user"));
 
-        // Activities are visible to any authenticated user for now. Privacy levels
-        // (public / followers-only / club-only) can layer on later.
+        User owner = entity.getUser();
+        boolean isOwner = owner.getId().equals(requesterId);
+        boolean isPrivate = "private".equals(owner.getPrivacyLevel());
+        if (isPrivate && !isOwner && !followService.isAcceptedFollower(requesterId, owner.getId())) {
+            throw ApiException.forbidden("This activity is private");
+        }
+
         Activity dto = Activity.from(entity);
         dto.kudoedByViewer = kudoRepository.findByActivityAndUser(entity, requester).isPresent();
-        dto.ownedByViewer = entity.getUser().getId().equals(requesterId);
+        dto.ownedByViewer = isOwner;
         return dto;
     }
 }

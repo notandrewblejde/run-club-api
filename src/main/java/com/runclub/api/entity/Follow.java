@@ -19,6 +19,9 @@ public class Follow {
     @JoinColumn(name = "following_id", nullable = false)
     private User following;
 
+    @Column(name = "status", nullable = false)
+    private String status = "accepted"; // "pending" | "accepted"
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -30,6 +33,9 @@ public class Follow {
 
     public User getFollowing() { return following; }
     public void setFollowing(User following) { this.following = following; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

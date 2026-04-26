@@ -30,6 +30,9 @@ public class UserProfile {
     @JsonProperty("state")
     public String state;
 
+    @JsonProperty("privacy_level")
+    public String privacyLevel; // "public" | "private"
+
     @JsonProperty("strava_connected")
     public boolean stravaConnected;
 
@@ -42,9 +45,10 @@ public class UserProfile {
     @JsonProperty("is_self")
     public boolean isSelf;
 
-    /** Whether the requesting user follows this profile. Null when {@code is_self} is true. */
-    @JsonProperty("followed_by_viewer")
-    public Boolean followedByViewer;
+    /** Relationship of the requesting viewer to this profile.
+     *  One of: "self" | "none" | "pending" | "accepted". */
+    @JsonProperty("follow_status")
+    public String followStatus;
 
     @JsonProperty("stats")
     public UserStats stats;

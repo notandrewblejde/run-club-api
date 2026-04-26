@@ -22,4 +22,8 @@ public class UpdateUserRequest {
 
     @JsonProperty("avatar_url")
     public String avatarUrl;
+
+    @jakarta.validation.constraints.Pattern(regexp = "public|private")
+    @JsonProperty("privacy_level")
+    public String privacyLevel;
 }

@@ -4,6 +4,7 @@ import com.runclub.api.api.ApiList;
 import com.runclub.api.api.Auth;
 import com.runclub.api.model.Activity;
 import com.runclub.api.model.Follow;
+import com.runclub.api.model.FollowRequest;
 import com.runclub.api.service.FollowService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
@@ -12,6 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -27,8 +29,17 @@ public class FollowController {
 
     @PostMapping("/users/{userId}/follow")
     @ResponseStatus(HttpStatus.CREATED)
-    public Follow followUser(@PathVariable UUID userId, Authentication authentication) {
-        return Follow.following(followService.followUser(Auth.userId(authentication), userId));
+    public Map<String, Object> followUser(@PathVariable UUID userId, Authentication authentication) {
+        com.runclub.api.entity.Follow f = followService.followUser(Auth.userId(authentication), userId);
+        Follow body = Follow.following(f);
+        return Map.of(
+            "object", body.object,
+            "follower_id", body.followerId,
+            "following_id", body.followingId,
+            "user", body.user,
+            "status", f.getStatus(),
+            "created", body.created != null ? body.created : 0
+        );
     }
 
     @DeleteMapping("/users/{userId}/follow")
@@ -57,6 +68,30 @@ public class FollowController {
         List<Follow> data = following.getContent().stream().map(Follow::following).toList();
         return ApiList.of(data, following.hasNext(), following.getTotalElements(),
             "/v1/users/" + userId + "/following");
+    }
+
+    @GetMapping("/follow-requests")
+    public ApiList<FollowRequest> getMyPendingRequests(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int limit,
+            Authentication authentication) {
+        UUID viewerId = Auth.userId(authentication);
+        Page<com.runclub.api.entity.Follow> requests = followService.getPendingRequestsFor(viewerId, page, limit);
+        List<FollowRequest> data = requests.getContent().stream().map(FollowRequest::from).toList();
+        return ApiList.of(data, requests.hasNext(), requests.getTotalElements(), "/v1/follow-requests");
+    }
+
+    @PostMapping("/follow-requests/{requestId}/accept")
+    public FollowRequest acceptRequest(@PathVariable UUID requestId, Authentication authentication) {
+        UUID viewerId = Auth.userId(authentication);
+        return FollowRequest.from(followService.acceptRequest(viewerId, requestId));
+    }
+
+    @DeleteMapping("/follow-requests/{requestId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void rejectRequest(@PathVariable UUID requestId, Authentication authentication) {
+        UUID viewerId = Auth.userId(authentication);
+        followService.rejectRequest(viewerId, requestId);
     }
 
     @GetMapping("/feed/home")

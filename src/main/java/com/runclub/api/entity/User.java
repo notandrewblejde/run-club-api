@@ -44,6 +44,9 @@ public class User {
     @Column(name = "state")
     private String state;
 
+    @Column(name = "privacy_level", nullable = false)
+    private String privacyLevel = "public"; // "public" | "private"
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -85,6 +88,9 @@ public class User {
 
     public String getState() { return state; }
     public void setState(String state) { this.state = state; }
+
+    public String getPrivacyLevel() { return privacyLevel; }
+    public void setPrivacyLevel(String privacyLevel) { this.privacyLevel = privacyLevel; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

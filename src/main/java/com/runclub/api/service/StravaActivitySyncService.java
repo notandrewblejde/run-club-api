@@ -38,13 +38,16 @@ public class StravaActivitySyncService {
     private final StravaApiService stravaApiService;
     private final ActivityRepository activityRepository;
     private final UserRepository userRepository;
+    private final GoalAttributionService goalAttributionService;
 
     public StravaActivitySyncService(StravaApiService stravaApiService,
                                      ActivityRepository activityRepository,
-                                     UserRepository userRepository) {
+                                     UserRepository userRepository,
+                                     GoalAttributionService goalAttributionService) {
         this.stravaApiService = stravaApiService;
         this.activityRepository = activityRepository;
         this.userRepository = userRepository;
+        this.goalAttributionService = goalAttributionService;
     }
 
     /**
@@ -182,6 +185,10 @@ public class StravaActivitySyncService {
             activity.setCreatedAt(LocalDateTime.now());
         }
 
-        return activityRepository.save(activity);
+        Activity saved = activityRepository.save(activity);
+        // Best-effort: attribute to any active club goals this user belongs to.
+        // Failures are logged inside the attribution service and don't fail the sync.
+        goalAttributionService.attributeToActiveGoals(saved);
+        return saved;
     }
 }

@@ -42,13 +42,15 @@ public class UserProfileService {
         p.bio = user.getBio();
         p.city = user.getCity();
         p.state = user.getState();
+        p.privacyLevel = user.getPrivacyLevel();
         p.stravaConnected = user.getStravaAthleteId() != null;
         p.followersCount = followService.getFollowersCount(user.getId());
         p.followingCount = followService.getFollowingCount(user.getId());
         p.isSelf = requesterId != null && requesterId.equals(user.getId());
-        if (!p.isSelf && requesterId != null) {
-            p.followedByViewer = followService.isFollowing(requesterId, user.getId());
-        }
+        p.followStatus = followService.getFollowStatus(requesterId, user.getId());
+
+        // Stats are aggregate so they're fine to expose. Activity lists are gated
+        // separately at the activity endpoints.
         p.stats = computeStats(user);
         return p;
     }
@@ -60,7 +62,6 @@ public class UserProfileService {
         BigDecimal totalMiles = BigDecimal.ZERO;
         long totalSeconds = 0;
         BigDecimal totalElevationFt = BigDecimal.ZERO;
-
         BigDecimal milesLast30 = BigDecimal.ZERO;
         long activitiesLast30 = 0;
 
