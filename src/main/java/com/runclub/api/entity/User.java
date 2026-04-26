@@ -7,8 +7,12 @@ import java.util.UUID;
 @Entity
 @Table(name = "users")
 public class User {
+    /**
+     * Deterministic UUID derived from the Auth0 `sub` claim (see UserController.getMe).
+     * Set explicitly on first lazy-create; never auto-generated, since every other
+     * endpoint resolves the row by recomputing this UUID from the JWT.
+     */
     @Id
-    @GeneratedValue
     private UUID id;
 
     @Column(unique = true, nullable = false)
