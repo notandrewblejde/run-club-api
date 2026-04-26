@@ -57,8 +57,9 @@ public class StravaController {
 
             User updatedUser = stravaOAuthService.handleOAuthCallback(code, user.getId());
 
-            // Kick off async backfill so the user's feed populates without blocking the response.
+            // Kick off async backfill, then deep sync for full GPS polylines.
             stravaActivitySyncService.backfillRecentActivitiesAsync(updatedUser.getId());
+            stravaActivitySyncService.deepSyncRecentActivitiesAsync(updatedUser.getId());
 
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Strava connected successfully");
@@ -86,6 +87,7 @@ public class StravaController {
             User user = userRepository.findByAuth0Id(auth0Id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
             stravaActivitySyncService.backfillRecentActivitiesAsync(user.getId());
+            stravaActivitySyncService.deepSyncRecentActivitiesAsync(user.getId());
             return ResponseEntity.ok(Map.of("status", "started"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
