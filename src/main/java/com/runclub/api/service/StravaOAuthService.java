@@ -5,8 +5,14 @@ import com.runclub.api.entity.User;
 import com.runclub.api.repository.UserRepository;
 import com.runclub.api.security.TokenCipher;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -29,7 +35,7 @@ public class StravaOAuthService {
     @Value("${strava.client-secret}")
     private String clientSecret;
 
-    @Value("${strava.redirect-uri:http://localhost:3000/strava/callback}")
+    @Value("${strava.redirect-uri:runclub://localhost/strava-callback}")
     private String redirectUri;
 
     private final UserRepository userRepository;
@@ -43,22 +49,32 @@ public class StravaOAuthService {
     }
 
     public String getAuthorizationUrl() {
-        return String.format(
-            "https://www.strava.com/oauth/authorize?client_id=%s&response_type=code&redirect_uri=%s&approval_prompt=auto&scope=activity:read_all",
-            clientId,
-            redirectUri
-        );
+        return UriComponentsBuilder.fromHttpUrl("https://www.strava.com/oauth/authorize")
+            .queryParam("client_id", clientId)
+            .queryParam("response_type", "code")
+            .queryParam("redirect_uri", redirectUri)
+            .queryParam("approval_prompt", "auto")
+            .queryParam("scope", "activity:read_all")
+            .encode()
+            .build()
+            .toUriString();
     }
 
     public User handleOAuthCallback(String code, UUID userId) {
-        Map<String, Object> tokenRequest = new HashMap<>();
-        tokenRequest.put("client_id", clientId);
-        tokenRequest.put("client_secret", clientSecret);
-        tokenRequest.put("code", code);
-        tokenRequest.put("grant_type", "authorization_code");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> tokenRequest = new LinkedMultiValueMap<>();
+        tokenRequest.add("client_id", clientId);
+        tokenRequest.add("client_secret", clientSecret);
+        tokenRequest.add("code", code);
+        tokenRequest.add("grant_type", "authorization_code");
+        tokenRequest.add("redirect_uri", redirectUri);
+
+        HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(tokenRequest, headers);
 
         try {
-            StravaTokenResponse response = restTemplate.postForObject(STRAVA_TOKEN_URL, tokenRequest, StravaTokenResponse.class);
+            StravaTokenResponse response = restTemplate.postForObject(STRAVA_TOKEN_URL, entity, StravaTokenResponse.class);
             if (response == null) {
                 throw new RuntimeException("Failed to get token from Strava");
             }
