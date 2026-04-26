@@ -45,7 +45,7 @@ public class PostService {
         this.clubMembershipRepository = clubMembershipRepository;
     }
 
-    public Post createPost(UUID clubId, UUID userId, String content, String[] photoUrls) {
+    public Post createPost(UUID clubId, UUID userId, String content, String[] photoUrls, UUID relatedActivityId) {
         Club club = clubRepository.findById(clubId)
             .orElseThrow(() -> ApiException.notFound("club"));
         User author = userRepository.findById(userId)
@@ -58,11 +58,21 @@ public class PostService {
             throw ApiException.missingField("content");
         }
 
+        Activity related = null;
+        if (relatedActivityId != null) {
+            related = activityRepository.findById(relatedActivityId)
+                .orElseThrow(() -> ApiException.notFound("activity"));
+            if (!related.getUser().getId().equals(author.getId())) {
+                throw ApiException.forbidden("You can only link your own activities to a post");
+            }
+        }
+
         Post post = new Post();
         post.setClub(club);
         post.setAuthor(author);
         post.setContent(content);
         post.setPhotoUrls(photoUrls);
+        post.setRelatedActivity(related);
         post.setCreatedAt(LocalDateTime.now());
         post.setUpdatedAt(LocalDateTime.now());
 
@@ -136,6 +146,7 @@ public class PostService {
             postMap.put("author_avatar_url", post.getAuthor().getProfilePicUrl());
             postMap.put("content", post.getContent());
             postMap.put("photos", post.getPhotoUrls());
+            postMap.put("related_activity_id", post.getRelatedActivity() != null ? post.getRelatedActivity().getId() : null);
             postMap.put("created_at", post.getCreatedAt());
             postMap.put("updated_at", post.getUpdatedAt());
             feed.add(postMap);

@@ -76,6 +76,12 @@ public class Activity {
     @JsonProperty("photos")
     public String[] photos;
 
+    @JsonProperty("user_note")
+    public String userNote;
+
+    @JsonProperty("app_photos")
+    public String[] appPhotos;
+
     @JsonProperty("kudos_count")
     public int kudosCount;
 
@@ -121,6 +127,8 @@ public class Activity {
         d.maxHeartRateBpm = a.getMaxHeartRateBpm();
         d.mapPolyline = a.getMapPolyline();
         d.photos = a.getPhotos();
+        d.userNote = a.getUserNote();
+        d.appPhotos = a.getAppPhotos();
         d.kudosCount = a.getKudosCount() == null ? 0 : a.getKudosCount();
         d.commentCount = a.getCommentCount() == null ? 0 : a.getCommentCount();
         d.personalRecord = Boolean.TRUE.equals(a.getIsPersonalRecord());

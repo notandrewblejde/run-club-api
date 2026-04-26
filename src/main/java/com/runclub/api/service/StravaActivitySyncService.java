@@ -169,6 +169,7 @@ public class StravaActivitySyncService {
             activity.setMapPolyline(poly);
         }
 
+        // Strava-sourced gallery only; user_note / app_photos are never set here (JPA keeps existing values).
         if (src.getPhotos() != null && !src.getPhotos().isEmpty()) {
             String[] urls = src.getPhotos().stream()
                 .filter(p -> p.getUrls() != null && p.getUrls().getFull() != null)

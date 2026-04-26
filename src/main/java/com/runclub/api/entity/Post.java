@@ -25,6 +25,10 @@ public class Post {
     @Column(name = "photos", columnDefinition = "TEXT[]")
     private String[] photoUrls;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "related_activity_id")
+    private Activity relatedActivity;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -45,6 +49,9 @@ public class Post {
 
     public String[] getPhotoUrls() { return photoUrls; }
     public void setPhotoUrls(String[] photoUrls) { this.photoUrls = photoUrls; }
+
+    public Activity getRelatedActivity() { return relatedActivity; }
+    public void setRelatedActivity(Activity relatedActivity) { this.relatedActivity = relatedActivity; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

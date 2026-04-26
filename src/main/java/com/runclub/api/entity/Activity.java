@@ -61,6 +61,14 @@ public class Activity {
     @Column(name = "photos", columnDefinition = "TEXT[]")
     private String[] photos;
 
+    /** User-written caption; never set by Strava sync. */
+    @Column(name = "user_note", columnDefinition = "TEXT")
+    private String userNote;
+
+    /** App-uploaded photo URLs (S3); never set by Strava sync. */
+    @Column(name = "app_photos", columnDefinition = "TEXT[]")
+    private String[] appPhotos;
+
     @Column(name = "is_personal_record")
     private Boolean isPersonalRecord = false;
 
@@ -123,6 +131,12 @@ public class Activity {
 
     public String[] getPhotos() { return photos; }
     public void setPhotos(String[] photos) { this.photos = photos; }
+
+    public String getUserNote() { return userNote; }
+    public void setUserNote(String userNote) { this.userNote = userNote; }
+
+    public String[] getAppPhotos() { return appPhotos; }
+    public void setAppPhotos(String[] appPhotos) { this.appPhotos = appPhotos; }
 
     public Boolean getIsPersonalRecord() { return isPersonalRecord; }
     public void setIsPersonalRecord(Boolean isPersonalRecord) { this.isPersonalRecord = isPersonalRecord; }

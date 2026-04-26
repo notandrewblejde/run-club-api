@@ -28,6 +28,9 @@ public class Post {
     @JsonProperty("photos")
     public String[] photos;
 
+    @JsonProperty("related_activity_id")
+    public UUID relatedActivityId;
+
     @JsonProperty("created")
     public Long created;
 
@@ -39,6 +42,7 @@ public class Post {
         d.author = User.from(p.getAuthor());
         d.content = p.getContent();
         d.photos = p.getPhotoUrls();
+        d.relatedActivityId = p.getRelatedActivity() != null ? p.getRelatedActivity().getId() : null;
         d.created = p.getCreatedAt() != null ? p.getCreatedAt().toEpochSecond(ZoneOffset.UTC) : null;
         return d;
     }

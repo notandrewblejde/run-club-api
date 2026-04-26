@@ -2,10 +2,13 @@ package com.runclub.api.controller;
 
 import com.runclub.api.api.ApiList;
 import com.runclub.api.api.Auth;
+import com.runclub.api.dto.UpdateActivityRequest;
 import com.runclub.api.model.Activity;
 import com.runclub.api.service.ActivityService;
+import com.runclub.api.service.ActivityUploadService;
 import com.runclub.api.service.AthleteIntelligenceService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -22,10 +25,14 @@ public class ActivityController {
 
     private final ActivityService activityService;
     private final AthleteIntelligenceService athleteIntelligenceService;
+    private final ActivityUploadService activityUploadService;
 
-    public ActivityController(ActivityService activityService, AthleteIntelligenceService athleteIntelligenceService) {
+    public ActivityController(ActivityService activityService,
+                              AthleteIntelligenceService athleteIntelligenceService,
+                              ActivityUploadService activityUploadService) {
         this.activityService = activityService;
         this.athleteIntelligenceService = athleteIntelligenceService;
+        this.activityUploadService = activityUploadService;
     }
 
     @GetMapping
@@ -43,6 +50,24 @@ public class ActivityController {
     public Activity getActivity(@PathVariable UUID activityId, Authentication authentication) {
         UUID userId = Auth.userId(authentication);
         return activityService.getActivity(activityId, userId);
+    }
+
+    @PatchMapping("/{activityId}")
+    public Activity patchActivity(
+            @PathVariable UUID activityId,
+            @Valid @RequestBody UpdateActivityRequest body,
+            Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        return activityService.updateActivityDetails(activityId, userId, body);
+    }
+
+    @PostMapping("/{activityId}/photos/presign")
+    public Map<String, String> presignActivityPhoto(
+            @PathVariable UUID activityId,
+            @RequestBody(required = false) Map<String, String> body,
+            Authentication authentication) {
+        String contentType = body == null ? null : body.get("content_type");
+        return activityUploadService.presignActivityPhotoUpload(activityId, Auth.userId(authentication), contentType);
     }
 
     @GetMapping("/{activityId}/summary")

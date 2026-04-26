@@ -35,7 +35,7 @@ public class PostController {
             @Valid @RequestBody CreatePostRequest body,
             Authentication authentication) {
         com.runclub.api.entity.Post saved = postService.createPost(
-            clubId, Auth.userId(authentication), body.content, body.photos);
+            clubId, Auth.userId(authentication), body.content, body.photos, body.relatedActivityId);
         return ResponseEntity.status(HttpStatus.CREATED).body(Post.from(saved));
     }
 

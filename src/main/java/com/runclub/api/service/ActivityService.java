@@ -1,6 +1,7 @@
 package com.runclub.api.service;
 
 import com.runclub.api.api.ApiException;
+import com.runclub.api.dto.UpdateActivityRequest;
 import com.runclub.api.entity.User;
 import com.runclub.api.model.Activity;
 import com.runclub.api.repository.ActivityKudoRepository;
@@ -60,5 +61,28 @@ public class ActivityService {
         dto.kudoedByViewer = kudoRepository.findByActivityAndUser(entity, requester).isPresent();
         dto.ownedByViewer = isOwner;
         return dto;
+    }
+
+    /**
+     * Updates app-owned overlay fields (note, app photos). Only the activity owner may call.
+     * Strava sync never touches these columns.
+     */
+    public Activity updateActivityDetails(UUID activityId, UUID requesterId, UpdateActivityRequest body) {
+        com.runclub.api.entity.Activity entity = activityRepository.findById(activityId)
+            .orElseThrow(() -> ApiException.notFound("activity"));
+        if (!entity.getUser().getId().equals(requesterId)) {
+            throw ApiException.forbidden("Only the activity owner can edit details");
+        }
+
+        if (body.userNote != null) {
+            String trimmed = body.userNote.trim();
+            entity.setUserNote(trimmed.isEmpty() ? null : trimmed);
+        }
+        if (body.appPhotos != null) {
+            entity.setAppPhotos(body.appPhotos);
+        }
+
+        com.runclub.api.entity.Activity saved = activityRepository.save(entity);
+        return getActivity(saved.getId(), requesterId);
     }
 }
