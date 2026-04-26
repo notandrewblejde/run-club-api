@@ -27,4 +27,7 @@ public class UserStats {
 
     @JsonProperty("activities_30d")
     public long activities30d;
+
+    @JsonProperty("moving_seconds_30d")
+    public long movingSeconds30d;
 }

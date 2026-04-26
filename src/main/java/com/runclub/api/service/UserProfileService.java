@@ -64,6 +64,7 @@ public class UserProfileService {
         BigDecimal totalElevationFt = BigDecimal.ZERO;
         BigDecimal milesLast30 = BigDecimal.ZERO;
         long activitiesLast30 = 0;
+        long movingSecondsLast30 = 0;
 
         LocalDateTime cutoff30 = LocalDateTime.now().minusDays(30);
 
@@ -75,6 +76,9 @@ public class UserProfileService {
             if (a.getStartDate() != null && a.getStartDate().isAfter(cutoff30)) {
                 if (a.getDistanceMiles() != null) milesLast30 = milesLast30.add(a.getDistanceMiles());
                 activitiesLast30++;
+                if (a.getMovingTimeSeconds() != null) {
+                    movingSecondsLast30 += a.getMovingTimeSeconds();
+                }
             }
         }
 
@@ -85,6 +89,7 @@ public class UserProfileService {
         s.totalElevationFt = totalElevationFt.setScale(0, RoundingMode.HALF_UP).doubleValue();
         s.distanceMiles30d = milesLast30.setScale(2, RoundingMode.HALF_UP).doubleValue();
         s.activities30d = activitiesLast30;
+        s.movingSeconds30d = movingSecondsLast30;
         return s;
     }
 }
