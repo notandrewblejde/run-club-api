@@ -124,14 +124,13 @@ public class ClubGoalController {
             "goal_id", c.getGoal().getId(),
             "distance_miles", c.getDistanceMiles()));
     }
-}
 
     @PostMapping("/{goalId}/recalculate")
     public ResponseEntity<?> recalculate(@PathVariable UUID clubId,
                                           @PathVariable UUID goalId,
                                           Authentication authentication) {
         UUID userId = Auth.userId(authentication);
-        // Only club admins or the user themselves can trigger recalculation
         goalAttributionService.backfillContributionsAsync(goalId);
         return ResponseEntity.accepted().body("{\"message\": \"Recalculation triggered\"}");
     }
+}
