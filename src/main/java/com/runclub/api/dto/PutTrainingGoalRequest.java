@@ -1,17 +1,19 @@
 package com.runclub.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Size;
 
 public class PutTrainingGoalRequest {
 
     @Size(max = 8000)
-    private String goal_text;
+    @JsonProperty("goal_text")
+    private String goalText;
 
-    public String getGoal_text() {
-        return goal_text;
+    public String getGoalText() {
+        return goalText;
     }
 
-    public void setGoal_text(String goal_text) {
-        this.goal_text = goal_text;
+    public void setGoalText(String goalText) {
+        this.goalText = goalText;
     }
 }

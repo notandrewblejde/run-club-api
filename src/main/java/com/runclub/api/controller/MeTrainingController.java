@@ -75,7 +75,7 @@ public class MeTrainingController {
             @Valid @RequestBody PutTrainingGoalRequest body,
             Authentication authentication) {
         UUID userId = Auth.userId(authentication);
-        String text = body.getGoal_text() != null ? body.getGoal_text() : "";
+        String text = body.getGoalText() != null ? body.getGoalText() : "";
         UserTrainingProfile saved = trainingGoalService.putGoalText(userId, text);
         CompletableFuture.runAsync(() -> trainingGoalService.refreshInterpretationAndDailyPlan(userId));
         return getTrainingGoalResponseFromProfile(saved, userId);
