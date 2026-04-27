@@ -5,6 +5,8 @@ import com.runclub.api.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -14,6 +16,11 @@ import java.util.UUID;
 
 @Repository
 public interface ActivityRepository extends JpaRepository<Activity, UUID> {
+
+    /** Loads activity and owner in one query (avoids LazyInitialization on getUser in coach chat, etc.). */
+    @Query("SELECT a FROM Activity a JOIN FETCH a.user WHERE a.id = :id")
+    Optional<Activity> findByIdWithUser(@Param("id") UUID id);
+
     Page<Activity> findByUserOrderByStartDateDesc(User user, Pageable pageable);
     Optional<Activity> findByStravaActivityId(Long stravaActivityId);
     Page<Activity> findByUserInOrderByStartDateDesc(List<User> users, Pageable pageable);

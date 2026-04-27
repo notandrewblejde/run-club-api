@@ -241,6 +241,34 @@ public class TrainingGoalService {
         boolean hasMore
     ) {}
 
+    /**
+     * Goal text plus recent goal-feedback thread for per-activity coach chat prompts (read-only; avoids a
+     * service cycle by being called from {@link com.runclub.api.controller.ActivityController}).
+     */
+    private static final int COACH_CHAT_GOAL_CONTEXT_MESSAGES = 32;
+    private static final int COACH_CHAT_GOAL_CONTEXT_MAX_CHARS = 10_000;
+
+    @Transactional(readOnly = true)
+    public String buildActivityCoachContextForPrompt(UUID userId) {
+        UserTrainingProfile profile = getOrEmptyProfile(userId);
+        String goal = profile.getGoalText() == null ? "" : profile.getGoalText().trim();
+        String feedback = truncateTail(
+            buildChronologicalTranscript(userId, COACH_CHAT_GOAL_CONTEXT_MESSAGES),
+            COACH_CHAT_GOAL_CONTEXT_MAX_CHARS);
+        if (goal.isEmpty() && (feedback == null || feedback.isBlank())) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        if (!goal.isEmpty()) {
+            sb.append("Stated training goal: \"").append(goal).append("\"\n\n");
+        }
+        if (feedback != null && !feedback.isBlank()) {
+            sb.append("Recent clarifications about that goal (chronological; use as intent when it fits this workout):\n")
+                .append(feedback);
+        }
+        return sb.toString();
+    }
+
     private String buildChronologicalTranscript(UUID userId, int maxMessages) {
         var page = feedbackRepository.findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, maxMessages));
         List<UserTrainingGoalFeedback> rows = new ArrayList<>(page.getContent());

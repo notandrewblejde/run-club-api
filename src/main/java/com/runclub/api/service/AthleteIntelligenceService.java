@@ -100,15 +100,25 @@ public class AthleteIntelligenceService {
 
     /**
      * Owner-only conversational follow-up about their activity telemetry (and any stored summary).
+     *
+     * @param trainingGoalContextBlock optional: goal + goal-feedback thread from
+     *     {@link com.runclub.api.service.TrainingGoalService#buildActivityCoachContextForPrompt(UUID)}
      */
-    public String coachChatAboutActivity(UUID activityId, UUID requesterUserId, String userMessage) {
-        Activity activity = activityRepository.findById(activityId)
+    public String coachChatAboutActivity(
+        UUID activityId, UUID requesterUserId, String userMessage, String trainingGoalContextBlock) {
+        Activity activity = activityRepository.findByIdWithUser(activityId)
             .orElseThrow(() -> ApiException.notFound("activity"));
         if (!activity.getUser().getId().equals(requesterUserId)) {
             throw ApiException.forbidden("Coach chat is only available on your own activities");
         }
         StringBuilder prompt = new StringBuilder();
         prompt.append("You are a supportive running coach. The runner is asking about one of their workouts.\n\n");
+        if (trainingGoalContextBlock != null && !trainingGoalContextBlock.isBlank()) {
+            prompt.append("Longer-horizon context (stated training goal and notes about that goal; tie the workout ")
+                .append("to this when it helps, but the workout data below is still primary for this run):\n")
+                .append(trainingGoalContextBlock)
+                .append("\n\n");
+        }
         prompt.append("Workout data:\n").append(buildTelemetryBlock(activity)).append("\n");
         if (activity.getAiCoachSummary() != null && !activity.getAiCoachSummary().isBlank()) {
             prompt.append("Earlier coach takeaway for this run:\n")
