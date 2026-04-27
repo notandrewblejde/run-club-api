@@ -378,6 +378,31 @@ public class AthleteIntelligenceService {
     }
 
 
+
+    /**
+     * Builds the system prompt for per-activity coach chat — exposed for the streaming endpoint.
+     */
+    public String buildActivityCoachSystemPrompt(UUID activityId, UUID requesterUserId, String trainingGoalContextBlock) {
+        Activity activity = activityRepository.findByIdWithUser(activityId)
+            .orElseThrow(() -> ApiException.notFound("activity"));
+        if (!activity.getUser().getId().equals(requesterUserId)) {
+            throw ApiException.forbidden("Coach chat is only available on your own activities");
+        }
+        StringBuilder prompt = new StringBuilder();
+        prompt.append(SCOPE_AND_INJECTION_GUARD);
+        prompt.append("You are a supportive running coach. The runner is asking about one of their workouts.\n\n");
+        if (trainingGoalContextBlock != null && !trainingGoalContextBlock.isBlank()) {
+            prompt.append("Longer-horizon context (stated training goal and notes):\n")
+                .append(trainingGoalContextBlock).append("\n\n");
+        }
+        prompt.append("Workout data:\n").append(buildTelemetryBlock(activity)).append("\n");
+        if (activity.getAiCoachSummary() != null && !activity.getAiCoachSummary().isBlank()) {
+            prompt.append("Earlier coach takeaway:\n").append(activity.getAiCoachSummary()).append("\n\n");
+        }
+        prompt.append("Reply helpfully and concisely (under ~200 words). Use the stats above.");
+        return prompt.toString();
+    }
+
     /**
      * Builds the system prompt used for global coach chat — exposed so the streaming
      * endpoint can pass it to streamCoachChat without duplicating logic.

@@ -14,7 +14,9 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -111,5 +113,29 @@ public class ActivityController {
         String reply = athleteIntelligenceService.coachChatAboutActivity(
             activityId, userId, message.trim(), goalContext);
         return ResponseEntity.ok(Map.of("reply", reply));
+    }
+
+    @PostMapping(value = "/{activityId}/coach/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter coachChatStream(
+            @PathVariable UUID activityId,
+            @RequestBody(required = false) Map<String, String> body,
+            Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        activityService.getActivity(activityId, userId);
+        String message = body == null ? null : body.get("message");
+        if (message == null || message.isBlank()) {
+            throw ApiException.badRequest("message is required");
+        }
+        String goalContext = null;
+        try {
+            goalContext = trainingGoalService.buildActivityCoachContextForPrompt(userId);
+        } catch (Exception e) {
+            log.warn("Skipping training-goal context for streaming activity coach chat: {}", e.toString());
+        }
+        String systemPrompt = athleteIntelligenceService.buildActivityCoachSystemPrompt(
+            activityId, userId, goalContext);
+        SseEmitter emitter = new SseEmitter(90_000L);
+        athleteIntelligenceService.streamCoachChat(message.trim(), systemPrompt, emitter);
+        return emitter;
     }
 }
