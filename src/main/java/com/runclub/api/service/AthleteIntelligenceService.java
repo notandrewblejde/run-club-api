@@ -4,6 +4,7 @@ import com.runclub.api.api.ApiException;
 import com.runclub.api.entity.Activity;
 import com.runclub.api.repository.ActivityRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -13,7 +14,9 @@ import org.springframework.web.client.RestTemplate;
 
 import com.runclub.api.dto.ActivityArrivedCopy;
 
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -88,8 +91,8 @@ public class AthleteIntelligenceService {
         if (activity.getAiCoachSummary() != null && !activity.getAiCoachSummary().isBlank()) {
             return activity.getAiCoachSummary();
         }
-        String prompt = "You are a running coach. Based on the workout below, write 2–3 sentences: "
-            + "celebrate what they did well and give one concrete coaching tip. "
+        String prompt = "You are a running coach. Based on the workout below, write exactly two sentences: "
+            + "first sentence acknowledges what went well on this run; second sentence gives one concrete coaching tip. "
             + "Stay on running and this workout only—no unrelated topics.\n\n"
             + buildTelemetryBlock(activity);
         String text = callClaudeAPI(prompt);
@@ -128,6 +131,51 @@ public class AthleteIntelligenceService {
         prompt.append("Runner message:\n").append(userMessage)
             .append("\n\nReply helpfully and concisely (under ~200 words). Use the stats above.");
         return callClaudeAPI(prompt.toString());
+    }
+
+    /**
+     * General coaching chat: uses recent imported activities, roll-up stats, and optional goal + goal-feedback
+     * context (no single-activity telemetry).
+     */
+    public String coachChatGlobal(
+        UUID userId, String userMessage, String rollingStatsJson, String goalContextBlock) {
+        String recent = buildRecentActivitiesSnippet(userId);
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("You are a supportive running coach helping an athlete with their overall training.\n\n");
+        if (goalContextBlock != null && !goalContextBlock.isBlank()) {
+            prompt.append("Training goal context (stated goal and saved plan notes):\n")
+                .append(goalContextBlock)
+                .append("\n\n");
+        }
+        prompt.append(recent).append("\n");
+        prompt.append("Roll-up activity stats (JSON; authoritative numbers—do not invent workouts):\n")
+            .append(rollingStatsJson)
+            .append("\n\nAthlete message:\n")
+            .append(userMessage)
+            .append("\n\nReply helpfully and concisely (under ~220 words). Prefer concrete guidance grounded in "
+                + "the activity list and stats. If they need deep stats for one specific workout, tell them to "
+                + "open that activity and use Run chat there.");
+        return callClaudeAPI(prompt.toString());
+    }
+
+    private String buildRecentActivitiesSnippet(UUID userId) {
+        List<Activity> list = activityRepository.findByUser_IdOrderByStartDateDesc(userId, PageRequest.of(0, 18));
+        if (list.isEmpty()) {
+            return "Latest imported activities (newest first):\n(none yet — encourage syncing runs from Strava.)";
+        }
+        DateTimeFormatter fmt = DateTimeFormatter.ISO_LOCAL_DATE;
+        StringBuilder sb = new StringBuilder();
+        sb.append("Latest imported activities (newest first):\n");
+        for (Activity a : list) {
+            String name = a.getName() != null ? a.getName() : "Run";
+            double mi = a.getDistanceMiles() != null ? a.getDistanceMiles().doubleValue() : 0.0;
+            sb.append("- ").append(name).append(": ").append(String.format("%.2f", mi)).append(" mi");
+            if (a.getStartDate() != null) {
+                sb.append(" · ").append(a.getStartDate().toLocalDate().format(fmt));
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
     }
 
     /**

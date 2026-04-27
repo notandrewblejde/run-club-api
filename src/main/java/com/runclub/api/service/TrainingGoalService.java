@@ -269,6 +269,12 @@ public class TrainingGoalService {
         return sb.toString();
     }
 
+    /** Rolling activity stats JSON (same source as training-plan prompts). */
+    @Transactional(readOnly = true)
+    public String rollingStatsJsonForUser(UUID userId) {
+        return buildRollingStatsJson(userId);
+    }
+
     private String buildChronologicalTranscript(UUID userId, int maxMessages) {
         var page = feedbackRepository.findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, maxMessages));
         List<UserTrainingGoalFeedback> rows = new ArrayList<>(page.getContent());
