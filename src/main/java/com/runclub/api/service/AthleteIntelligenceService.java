@@ -21,6 +21,13 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -369,4 +376,134 @@ public class AthleteIntelligenceService {
             return "Error generating AI summary: " + e.getMessage();
         }
     }
+
+
+    /**
+     * Builds the system prompt used for global coach chat — exposed so the streaming
+     * endpoint can pass it to streamCoachChat without duplicating logic.
+     */
+    public String buildGlobalCoachSystemPrompt(UUID userId, String rollingStatsJson, String goalContextBlock) {
+        String recent = buildRecentActivitiesSnippet(userId);
+        StringBuilder prompt = new StringBuilder();
+        prompt.append(SCOPE_AND_INJECTION_GUARD);
+        prompt.append("You are a supportive running coach helping an athlete with their overall training.\n\n");
+        if (goalContextBlock != null && !goalContextBlock.isBlank()) {
+            prompt.append("Training goal context (stated goal and saved plan notes):\n")
+                .append(goalContextBlock)
+                .append("\n\n");
+        }
+        prompt.append(recent).append("\n");
+        prompt.append("Roll-up activity stats (JSON; authoritative numbers—do not invent workouts):\n")
+            .append(rollingStatsJson)
+            .append("\n\nReply helpfully and concisely (under ~220 words). Prefer concrete guidance grounded in "
+                + "the activity list and stats.");
+        return prompt.toString();
+    }
+
+    /**
+     * Streams a coaching reply token-by-token via SSE.
+     * The emitter receives "data: <token>\n\n" for each content chunk,
+     * then sends a final "event: done\ndata: [DONE]\n\n" and completes.
+     */
+    public void streamCoachChat(String userMessage, String systemPrompt, SseEmitter emitter) {
+        if (anthropicApiKey == null || anthropicApiKey.isBlank()) {
+            try {
+                emitter.send(SseEmitter.event().name("error").data("AI service not configured"));
+                emitter.complete();
+            } catch (Exception ignored) {}
+            return;
+        }
+
+        // Build request body with stream=true
+        String requestBody = buildStreamingRequestBody(userMessage, systemPrompt);
+
+        Thread.ofVirtual().start(() -> {
+            HttpURLConnection conn = null;
+            try {
+                URL url = new URL(CLAUDE_API_URL);
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("x-api-key", anthropicApiKey);
+                conn.setRequestProperty("anthropic-version", "2023-06-01");
+                conn.setDoOutput(true);
+                conn.setConnectTimeout(10_000);
+                conn.setReadTimeout(60_000);
+
+                byte[] body = requestBody.getBytes(StandardCharsets.UTF_8);
+                conn.setRequestProperty("Content-Length", String.valueOf(body.length));
+                conn.getOutputStream().write(body);
+
+                int status = conn.getResponseCode();
+                if (status != 200) {
+                    emitter.send(SseEmitter.event().name("error").data("Claude API error: " + status));
+                    emitter.complete();
+                    return;
+                }
+
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.startsWith("data: ")) {
+                            String data = line.substring(6).trim();
+                            if (data.equals("[DONE]")) break;
+                            // Extract text from content_block_delta events
+                            String token = extractDeltaText(data);
+                            if (token != null && !token.isEmpty()) {
+                                emitter.send(SseEmitter.event().data(token));
+                            }
+                        }
+                    }
+                }
+                emitter.send(SseEmitter.event().name("done").data("[DONE]"));
+                emitter.complete();
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Streaming error", e);
+                try {
+                    emitter.send(SseEmitter.event().name("error").data(e.getMessage()));
+                    emitter.completeWithError(e);
+                } catch (Exception ignored) {}
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        });
+    }
+
+    private String buildStreamingRequestBody(String userMessage, String systemPrompt) {
+        // Build JSON manually to avoid extra dependencies
+        String escapedSystem = systemPrompt.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+        String escapedUser = userMessage.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+        return String.format(
+            "{\"model\":\"%s\",\"max_tokens\":%d,\"stream\":true,\"system\":\"%s\",\"messages\":[{\"role\":\"user\",\"content\":\"%s\"}]}",
+            MODEL, MAX_TOKENS, escapedSystem, escapedUser
+        );
+    }
+
+    private String extractDeltaText(String jsonData) {
+        // Quick parse for: {"type":"content_block_delta","delta":{"type":"text_delta","text":"..."}}
+        try {
+            if (!jsonData.contains("text_delta")) return null;
+            int textIdx = jsonData.lastIndexOf("\"text\":\"");
+            if (textIdx < 0) return null;
+            int start = textIdx + 8;
+            StringBuilder sb = new StringBuilder();
+            for (int i = start; i < jsonData.length(); i++) {
+                char c = jsonData.charAt(i);
+                if (c == '\\') {
+                    if (i + 1 < jsonData.length()) {
+                        char next = jsonData.charAt(++i);
+                        if (next == 'n') sb.append('\n');
+                        else if (next == 't') sb.append('\t');
+                        else sb.append(next);
+                    }
+                } else if (c == '"') break;
+                else sb.append(c);
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
 }

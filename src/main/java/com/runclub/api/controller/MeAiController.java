@@ -7,7 +7,9 @@ import com.runclub.api.service.TrainingGoalService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -57,5 +59,39 @@ public class MeAiController {
         }
         String reply = athleteIntelligenceService.coachChatGlobal(userId, trimmed, stats, goalContext);
         return ResponseEntity.ok(Map.of("reply", reply));
+    }
+
+    /**
+     * Streaming version of /chat — returns SSE tokens in real-time.
+     * Each token arrives as: data: <token>\n\n
+     * Final event: event: done\ndata: [DONE]\n\n
+     */
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter globalChatStream(
+            @RequestBody(required = false) Map<String, String> body,
+            Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        String message = body == null ? null : body.get("message");
+        if (message == null || message.isBlank()) {
+            throw ApiException.badRequest("message is required");
+        }
+        String trimmed = message.trim();
+        if (trimmed.length() > 4000) {
+            throw ApiException.badRequest("message is too long");
+        }
+
+        String stats = trainingGoalService.rollingStatsJsonForUser(userId);
+        String goalContext = null;
+        try {
+            goalContext = trainingGoalService.buildActivityCoachContextForPrompt(userId);
+        } catch (Exception e) {
+            log.warn("Skipping training-goal context for streaming AI chat: {}", e.toString());
+        }
+
+        String systemPrompt = athleteIntelligenceService.buildGlobalCoachSystemPrompt(userId, stats, goalContext);
+
+        SseEmitter emitter = new SseEmitter(90_000L); // 90s timeout
+        athleteIntelligenceService.streamCoachChat(trimmed, systemPrompt, emitter);
+        return emitter;
     }
 }
