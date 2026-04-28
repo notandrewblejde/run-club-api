@@ -23,6 +23,11 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID> {
 
     Page<Activity> findByUserOrderByStartDateDesc(User user, Pageable pageable);
     Optional<Activity> findByStravaActivityId(Long stravaActivityId);
+
+    Optional<Activity> findByImportSourceAndImportExternalId(String importSource, String importExternalId);
+
+    Optional<Activity> findByUser_IdAndImportSourceAndImportExternalId(
+        UUID userId, String importSource, String importExternalId);
     Page<Activity> findByUserInOrderByStartDateDesc(List<User> users, Pageable pageable);
 
     /**

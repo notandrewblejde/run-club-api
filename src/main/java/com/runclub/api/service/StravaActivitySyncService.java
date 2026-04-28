@@ -146,6 +146,8 @@ public class StravaActivitySyncService {
 
         activity.setUser(user);
         activity.setStravaActivityId(src.getId());
+        activity.setImportSource("strava");
+        activity.setImportExternalId(String.valueOf(src.getId()));
         activity.setName(src.getName());
         activity.setType(src.getSportType() != null ? src.getSportType() : src.getType());
 

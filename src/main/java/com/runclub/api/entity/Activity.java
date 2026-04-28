@@ -16,8 +16,15 @@ public class Activity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "strava_id", unique = true, nullable = false)
+    /** Strava activity id when {@link #importSource} is {@code strava}; null for health imports. */
+    @Column(name = "strava_id")
     private Long stravaActivityId;
+
+    @Column(name = "import_source", nullable = false, length = 32)
+    private String importSource = "strava";
+
+    @Column(name = "import_external_id", nullable = false, length = 128)
+    private String importExternalId;
 
     @Column(nullable = false)
     private String name;
@@ -93,6 +100,12 @@ public class Activity {
 
     public Long getStravaActivityId() { return stravaActivityId; }
     public void setStravaActivityId(Long stravaActivityId) { this.stravaActivityId = stravaActivityId; }
+
+    public String getImportSource() { return importSource; }
+    public void setImportSource(String importSource) { this.importSource = importSource; }
+
+    public String getImportExternalId() { return importExternalId; }
+    public void setImportExternalId(String importExternalId) { this.importExternalId = importExternalId; }
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }

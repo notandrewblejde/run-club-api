@@ -21,6 +21,13 @@ public class Activity {
     @JsonProperty("strava_id")
     public Long stravaId;
 
+    /** {@code strava}, {@code apple_health}, or {@code health_connect}. */
+    @JsonProperty("import_source")
+    public String importSource;
+
+    @JsonProperty("import_external_id")
+    public String importExternalId;
+
     @JsonProperty("user")
     public User user;
 
@@ -109,6 +116,8 @@ public class Activity {
         Activity d = new Activity();
         d.id = a.getId();
         d.stravaId = a.getStravaActivityId();
+        d.importSource = a.getImportSource();
+        d.importExternalId = a.getImportExternalId();
         d.user = User.from(a.getUser());
         d.name = a.getName();
         d.sportType = a.getType();
