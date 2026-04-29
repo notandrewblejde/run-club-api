@@ -146,9 +146,12 @@ public class ClubService {
             club.setPrivacyLevel(privacyLevel);
             any = true;
         }
+        if (coverImageUrl != null) {
+            club.setCoverImageUrl(coverImageUrl);
+            any = true;
+        }
         if (!any) {
-            if (coverImageUrl != null) { club.setCoverImageUrl(coverImageUrl); updated = true; }
-            if (!updated) throw ApiException.badRequest("Provide at least one field to update");
+            throw ApiException.badRequest("Provide at least one field to update");
         }
 
         club.setUpdatedAt(LocalDateTime.now());

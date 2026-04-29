@@ -9,6 +9,7 @@ import com.runclub.api.model.ClubMembership;
 import com.runclub.api.model.LeaderboardEntry;
 import com.runclub.api.service.ClubLeaderboardService;
 import com.runclub.api.service.ClubService;
+import com.runclub.api.service.ClubUploadService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -30,10 +31,15 @@ public class ClubController {
 
     private final ClubService clubService;
     private final ClubLeaderboardService clubLeaderboardService;
+    private final ClubUploadService clubUploadService;
 
-    public ClubController(ClubService clubService, ClubLeaderboardService clubLeaderboardService) {
+    public ClubController(
+            ClubService clubService,
+            ClubLeaderboardService clubLeaderboardService,
+            ClubUploadService clubUploadService) {
         this.clubService = clubService;
         this.clubLeaderboardService = clubLeaderboardService;
+        this.clubUploadService = clubUploadService;
     }
 
     @PostMapping

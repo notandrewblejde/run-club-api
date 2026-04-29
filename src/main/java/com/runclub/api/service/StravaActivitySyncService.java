@@ -4,6 +4,7 @@ import com.runclub.api.dto.StravaActivityResponse;
 import com.runclub.api.entity.Activity;
 import com.runclub.api.entity.User;
 import com.runclub.api.repository.ActivityRepository;
+import com.runclub.api.repository.ClubMembershipRepository;
 import com.runclub.api.repository.UserRepository;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -41,7 +42,7 @@ public class StravaActivitySyncService {
     private final UserRepository userRepository;
     private final GoalAttributionService goalAttributionService;
     private final PushNotificationService pushNotificationService;
-    private final com.runclub.api.repository.ClubMembershipRepository clubMembershipRepository;
+    private final ClubMembershipRepository clubMembershipRepository;
     private final AthleteIntelligenceService athleteIntelligenceService;
     private final TrainingGoalService trainingGoalService;
     private final NotificationService notificationService;
@@ -50,6 +51,8 @@ public class StravaActivitySyncService {
                                      ActivityRepository activityRepository,
                                      UserRepository userRepository,
                                      GoalAttributionService goalAttributionService,
+                                     PushNotificationService pushNotificationService,
+                                     ClubMembershipRepository clubMembershipRepository,
                                      AthleteIntelligenceService athleteIntelligenceService,
                                      TrainingGoalService trainingGoalService,
                                      NotificationService notificationService) {
@@ -57,6 +60,8 @@ public class StravaActivitySyncService {
         this.activityRepository = activityRepository;
         this.userRepository = userRepository;
         this.goalAttributionService = goalAttributionService;
+        this.pushNotificationService = pushNotificationService;
+        this.clubMembershipRepository = clubMembershipRepository;
         this.athleteIntelligenceService = athleteIntelligenceService;
         this.trainingGoalService = trainingGoalService;
         this.notificationService = notificationService;
@@ -271,8 +276,9 @@ public class StravaActivitySyncService {
 
         if (memberUserIds.isEmpty()) return;
 
-        String actorName = user.getDisplayName() != null ? user.getDisplayName()
-            : (user.getFirstName() != null ? user.getFirstName() : "A member");
+        String actorName = user.getDisplayName() != null && !user.getDisplayName().isBlank()
+            ? user.getDisplayName().trim()
+            : "A member";
         String activityName = activity.getName() != null ? activity.getName() : "a run";
         double distanceMiles = activity.getDistanceMiles() != null ? activity.getDistanceMiles().doubleValue() : 0;
 
