@@ -40,6 +40,8 @@ public class StravaActivitySyncService {
     private final ActivityRepository activityRepository;
     private final UserRepository userRepository;
     private final GoalAttributionService goalAttributionService;
+    private final PushNotificationService pushNotificationService;
+    private final com.runclub.api.repository.ClubMembershipRepository clubMembershipRepository;
     private final AthleteIntelligenceService athleteIntelligenceService;
     private final TrainingGoalService trainingGoalService;
     private final NotificationService notificationService;
@@ -253,4 +255,29 @@ public class StravaActivitySyncService {
             logger.log(Level.SEVERE, "Deep sync failed for user " + userId, e);
         }
     }
+
+    private void notifyClubMembersOfActivity(com.runclub.api.entity.User user, com.runclub.api.entity.Activity activity) {
+        // Get all clubs this user belongs to
+        List<java.util.UUID> memberUserIds = clubMembershipRepository
+            .findByUser_Id(user.getId()).stream()
+            .flatMap(membership -> {
+                // Get all members of each club this user is in
+                return clubMembershipRepository.findByClub_Id(membership.getClub().getId())
+                    .stream()
+                    .map(m -> m.getUser().getId());
+            })
+            .distinct()
+            .collect(java.util.stream.Collectors.toList());
+
+        if (memberUserIds.isEmpty()) return;
+
+        String actorName = user.getDisplayName() != null ? user.getDisplayName()
+            : (user.getFirstName() != null ? user.getFirstName() : "A member");
+        String activityName = activity.getName() != null ? activity.getName() : "a run";
+        double distanceMiles = activity.getDistanceMiles() != null ? activity.getDistanceMiles().doubleValue() : 0;
+
+        pushNotificationService.notifyClubMembersActivityAsync(
+            user.getId(), actorName, activity.getId(), activityName, distanceMiles, memberUserIds);
+    }
+
 }

@@ -18,5 +18,7 @@ public interface ClubMembershipRepository extends JpaRepository<ClubMembership, 
     Page<ClubMembership> findByUser(User user, Pageable pageable);
     Page<ClubMembership> findByClub(Club club, Pageable pageable);
     List<ClubMembership> findByClubAndRole(Club club, String role);
+    List<ClubMembership> findByUser_Id(java.util.UUID userId);
+    List<ClubMembership> findByClub_Id(java.util.UUID clubId);
     int countByClub(Club club);
 }
