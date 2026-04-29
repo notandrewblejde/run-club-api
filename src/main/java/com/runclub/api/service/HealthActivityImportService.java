@@ -86,6 +86,15 @@ public class HealthActivityImportService {
         if (item.getDistanceMeters() != null) {
             activity.setDistanceMeters(item.getDistanceMeters().setScale(2, RoundingMode.HALF_UP));
         }
+        if (item.getElevationGainFt() != null) {
+            activity.setElevationGainFt(item.getElevationGainFt().setScale(2, RoundingMode.HALF_UP));
+        }
+        if (item.getAvgHeartRateBpm() != null) {
+            activity.setAvgHeartRateBpm(item.getAvgHeartRateBpm());
+        }
+        if (item.getMaxHeartRateBpm() != null) {
+            activity.setMaxHeartRateBpm(item.getMaxHeartRateBpm());
+        }
         activity.setMovingTimeSeconds(item.getMovingTimeSeconds());
         activity.setElapsedTimeSeconds(item.getMovingTimeSeconds());
         activity.setMapPolyline(item.getMapPolyline());

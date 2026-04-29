@@ -130,7 +130,9 @@ public class PostService {
 
         Pageable activityPageable = PageRequest.of(0, 1000, Sort.by(Sort.Direction.DESC, "startDate"));
 
-        java.util.List<ClubMembership> memberships = clubMembershipRepository.findByClub(club, postPageable).getContent();
+        // Membership rows use joinedAt, not createdAt — invalid sort breaks this query at runtime.
+        Pageable membershipPageable = PageRequest.of(0, 1000, Sort.by(Sort.Direction.DESC, "joinedAt"));
+        java.util.List<ClubMembership> memberships = clubMembershipRepository.findByClub(club, membershipPageable).getContent();
         java.util.List<User> clubMembers = memberships.stream().map(ClubMembership::getUser).collect(Collectors.toList());
 
         Page<Activity> activities = activityRepository.findByUserInOrderByStartDateDesc(clubMembers, activityPageable);

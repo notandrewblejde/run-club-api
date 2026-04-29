@@ -42,6 +42,16 @@ public class HealthWorkoutImportItem {
     @JsonProperty("map_polyline")
     private String mapPolyline;
 
+    /** Positive vertical gain along the route, feet (from HealthKit route altitudes when available). */
+    @JsonProperty("elevation_gain_ft")
+    private BigDecimal elevationGainFt;
+
+    @JsonProperty("avg_heart_rate_bpm")
+    private Integer avgHeartRateBpm;
+
+    @JsonProperty("max_heart_rate_bpm")
+    private Integer maxHeartRateBpm;
+
     public String getImportSource() {
         return importSource;
     }
@@ -96,5 +106,29 @@ public class HealthWorkoutImportItem {
 
     public void setMapPolyline(String mapPolyline) {
         this.mapPolyline = mapPolyline;
+    }
+
+    public BigDecimal getElevationGainFt() {
+        return elevationGainFt;
+    }
+
+    public void setElevationGainFt(BigDecimal elevationGainFt) {
+        this.elevationGainFt = elevationGainFt;
+    }
+
+    public Integer getAvgHeartRateBpm() {
+        return avgHeartRateBpm;
+    }
+
+    public void setAvgHeartRateBpm(Integer avgHeartRateBpm) {
+        this.avgHeartRateBpm = avgHeartRateBpm;
+    }
+
+    public Integer getMaxHeartRateBpm() {
+        return maxHeartRateBpm;
+    }
+
+    public void setMaxHeartRateBpm(Integer maxHeartRateBpm) {
+        this.maxHeartRateBpm = maxHeartRateBpm;
     }
 }
