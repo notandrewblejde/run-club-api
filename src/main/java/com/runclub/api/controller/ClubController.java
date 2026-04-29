@@ -84,7 +84,7 @@ public class ClubController {
             @Valid @RequestBody UpdateClubRequest body,
             Authentication authentication) {
         UUID userId = Auth.userId(authentication);
-        clubService.updateClub(clubId, userId, body.name, body.description, body.privacyLevel);
+        clubService.updateClub(clubId, userId, body.name, body.description, body.privacyLevel, body.coverImageUrl);
         return clubService.getClub(clubId, userId);
     }
 
@@ -155,5 +155,21 @@ public class ClubController {
         List<ClubMembership> data = members.getContent().stream().map(ClubMembership::from).toList();
         return ApiList.of(data, members.hasNext(), members.getTotalElements(),
             "/v1/clubs/" + clubId + "/members");
+    }
+
+    /**
+     * Issues a presigned S3 PUT URL for a club cover photo upload.
+     * Flow: GET presign → PUT image to upload_url → PATCH /v1/clubs/{id} with cover_image_url
+     */
+    @PostMapping("/{clubId}/cover/presign")
+    public ResponseEntity<Map<String, String>> presignCoverUpload(
+            @PathVariable UUID clubId,
+            @RequestParam(defaultValue = "image/jpeg") String contentType,
+            Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        // Verify user is admin of this club
+        clubService.requireAdmin(clubId, userId);
+        Map<String, String> result = clubUploadService.presignCoverUpload(clubId, contentType);
+        return ResponseEntity.ok(result);
     }
 }

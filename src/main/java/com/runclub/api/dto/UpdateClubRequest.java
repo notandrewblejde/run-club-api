@@ -17,4 +17,7 @@ public class UpdateClubRequest {
     @Pattern(regexp = "public|private")
     @JsonProperty("privacy_level")
     public String privacyLevel;
+
+    @JsonProperty("cover_image_url")
+    public String coverImageUrl;
 }

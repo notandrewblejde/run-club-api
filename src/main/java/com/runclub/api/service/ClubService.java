@@ -101,7 +101,23 @@ public class ClubService {
         return saved;
     }
 
+    public void requireAdmin(UUID clubId, UUID userId) {
+        Club club = clubRepository.findById(clubId)
+            .orElseThrow(() -> ApiException.notFound("club"));
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> ApiException.notFound("user"));
+        ClubMembership membership = membershipRepository.findByClubAndUser(club, user)
+            .orElseThrow(() -> ApiException.forbidden("You are not a member of this club"));
+        if (!"owner".equals(membership.getRole()) && !"admin".equals(membership.getRole())) {
+            throw ApiException.forbidden("Only club admins can perform this action");
+        }
+    }
+
     public Club updateClub(UUID clubId, UUID actorUserId, String name, String description, String privacyLevel) {
+        return updateClub(clubId, actorUserId, name, description, privacyLevel, null);
+    }
+
+    public Club updateClub(UUID clubId, UUID actorUserId, String name, String description, String privacyLevel, String coverImageUrl) {
         Club club = clubRepository.findById(clubId)
             .orElseThrow(() -> ApiException.notFound("club"));
         User actor = userRepository.findById(actorUserId)
@@ -131,7 +147,8 @@ public class ClubService {
             any = true;
         }
         if (!any) {
-            throw ApiException.badRequest("Provide at least one field to update");
+            if (coverImageUrl != null) { club.setCoverImageUrl(coverImageUrl); updated = true; }
+            if (!updated) throw ApiException.badRequest("Provide at least one field to update");
         }
 
         club.setUpdatedAt(LocalDateTime.now());
