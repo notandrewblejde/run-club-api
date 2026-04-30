@@ -172,8 +172,18 @@ public class HealthActivityImportService {
         java.util.List<Activity> all = activityRepository.findByUser_Id(userId);
         java.util.Set<java.util.UUID> toDelete = new java.util.HashSet<>();
 
-        // Sort: strava first (it wins), then apple_health, then others
-        all.sort((a, b) -> sourceRank(a.getImportSource()) - sourceRank(b.getImportSource()));
+        // Sort: lower source rank = higher priority = kept
+        // Tiebreaker: prefer activity with GPS/polyline data
+        all.sort((a, b) -> {
+            int rankDiff = sourceRank(a.getImportSource()) - sourceRank(b.getImportSource());
+            if (rankDiff != 0) return rankDiff;
+            // Same source rank: prefer the one with GPS data
+            boolean aHasGps = hasGpsData(a);
+            boolean bHasGps = hasGpsData(b);
+            if (aHasGps && !bHasGps) return -1;
+            if (!aHasGps && bHasGps) return 1;
+            return 0;
+        });
 
         for (int i = 0; i < all.size(); i++) {
             Activity a = all.get(i);
@@ -212,13 +222,26 @@ public class HealthActivityImportService {
         return toDelete.size();
     }
 
+    /**
+     * Lower rank = higher priority = kept in cross-source dedup.
+     * Priority is based on data quality: Strava has GPS/polyline, Apple Health may not.
+     * If user only has Apple Health (no Strava), their activities are never cross-source deduped.
+     */
     private static int sourceRank(String source) {
         return switch (source == null ? "" : source) {
-            case "strava" -> 0;
-            case "apple_health" -> 1;
-            case "health_connect" -> 2;
+            case "strava" -> 0;          // Best: GPS polyline, pace, heart rate from watch
+            case "apple_health" -> 1;    // Good: Apple Watch / iPhone GPS
+            case "health_connect" -> 2;  // OK: Android Health Connect
             default -> 3;
         };
+    }
+
+    /**
+     * When deduping, prefer the activity with GPS/polyline data if ranks are equal.
+     * This handles e.g. two apple_health entries where one has a map and one doesn't.
+     */
+    private static boolean hasGpsData(Activity a) {
+        return a.getMapPolyline() != null && !a.getMapPolyline().isBlank();
     }
 
 
