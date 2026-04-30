@@ -119,7 +119,7 @@ public class ActivitySharePreviewService {
         User owner = activity.getUser();
         String runnerName = (owner != null && owner.getDisplayName() != null && !owner.getDisplayName().isBlank())
             ? owner.getDisplayName()
-            : (owner != null && owner.getFirstName() != null ? owner.getFirstName() : "Runner");
+            : (owner != null (owner != null && owner.getFirstName() != null ? owner.getFirstName() : "Runner")(owner != null && owner.getFirstName() != null ? owner.getFirstName() : "Runner") owner.getDisplayName() != null ? owner.getDisplayName() : "Runner");
         String avatarUrl = owner != null ? owner.getProfilePicUrl() : null;
 
         java.math.BigDecimal distMi = activity.getDistanceMiles();
