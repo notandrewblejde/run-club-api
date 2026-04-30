@@ -26,6 +26,7 @@ public class HealthActivityImportService {
     private static final Logger logger = Logger.getLogger(HealthActivityImportService.class.getName());
 
     private final ActivityRepository activityRepository;
+    private final com.runclub.api.repository.UserRepository userRepository;
     private final GoalAttributionService goalAttributionService;
     private final AthleteIntelligenceService athleteIntelligenceService;
     private final TrainingGoalService trainingGoalService;
@@ -210,6 +211,38 @@ public class HealthActivityImportService {
             case "health_connect" -> 2;
             default -> 3;
         };
+    }
+
+
+    /**
+     * ONE-TIME startup dedup — runs on application start to clean up existing cross-source duplicates.
+     * After this runs once successfully, the ongoing dedup in upsertOne prevents new duplicates.
+     * This method is safe to run multiple times (idempotent).
+     */
+    @jakarta.annotation.PostConstruct
+    public void runStartupDedup() {
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                Thread.sleep(30_000); // wait 30s for app to fully start
+                logger.info("Running one-time startup activity dedup...");
+                java.util.List<com.runclub.api.entity.User> allUsers = userRepository.findAll();
+                int totalRemoved = 0;
+                for (com.runclub.api.entity.User user : allUsers) {
+                    try {
+                        int removed = deduplicateActivities(user.getId());
+                        if (removed > 0) {
+                            logger.info("Dedup: removed " + removed + " duplicate(s) for user " + user.getId());
+                            totalRemoved += removed;
+                        }
+                    } catch (Exception e) {
+                        logger.log(java.util.logging.Level.WARNING, "Dedup failed for user " + user.getId(), e);
+                    }
+                }
+                logger.info("Startup dedup complete: removed " + totalRemoved + " total duplicate(s) across " + allUsers.size() + " users");
+            } catch (Exception e) {
+                logger.log(java.util.logging.Level.WARNING, "Startup dedup error", e);
+            }
+        });
     }
 
 }
