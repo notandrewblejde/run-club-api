@@ -80,9 +80,11 @@ public class HealthActivityImportService {
         // Cross-source dedup: if no existing record for this source/externalId,
         // check if a Strava (or other-source) activity already covers the same run
         // Match: same user, start_date within ±5 minutes, distance within ±5%
-        if (activity == null && item.getStartDate() != null) {
-            java.time.LocalDateTime windowStart = item.getStartDate().minusMinutes(5);
-            java.time.LocalDateTime windowEnd = item.getStartDate().plusMinutes(5);
+        if (activity == null && item.getStartDateEpochSeconds() != null) {
+            java.time.LocalDateTime itemStart = java.time.LocalDateTime.ofEpochSecond(
+                item.getStartDateEpochSeconds(), 0, java.time.ZoneOffset.UTC);
+            java.time.LocalDateTime windowStart = itemStart.minusMinutes(5);
+            java.time.LocalDateTime windowEnd = itemStart.plusMinutes(5);
             java.util.List<Activity> nearby = activityRepository
                 .findByUser_IdAndStartDateBetween(uid, windowStart, windowEnd);
             for (Activity candidate : nearby) {
