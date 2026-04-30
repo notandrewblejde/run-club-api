@@ -40,7 +40,7 @@ public class PublicActivityShareController {
         }
         String canonical = request.getRequestURL().toString();
         String deepLink = "runclub://activity/" + activityId;
-        String html = sharePreviewService.buildHtmlPage(act.get(), canonical, deepLink);
+        String html = sharePreviewService.buildHtmlPage(act.get(), canonical, deepLink, activityId);
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType("text/html;charset=UTF-8"))
             .body(html);
