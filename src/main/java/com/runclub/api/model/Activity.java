@@ -108,6 +108,10 @@ public class Activity {
     @JsonProperty("owned_by_viewer")
     public Boolean ownedByViewer;
 
+    /** When {@code owned_by_viewer} is true: whether {@code GET /public/activities/{id}} returns a preview (public profile only). */
+    @JsonProperty("share_preview_available")
+    public Boolean sharePreviewAvailable;
+
     @JsonProperty("created")
     public Long created;
 

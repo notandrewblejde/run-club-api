@@ -38,6 +38,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers(HttpMethod.POST, "/v1/strava/webhook").permitAll()
                 .requestMatchers(HttpMethod.GET, "/v1/strava/webhook").permitAll()
+                .requestMatchers(HttpMethod.GET, "/public/**").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer()

@@ -60,6 +60,7 @@ public class ActivityService {
         Activity dto = Activity.from(entity);
         dto.kudoedByViewer = kudoRepository.findByActivityAndUser(entity, requester).isPresent();
         dto.ownedByViewer = isOwner;
+        dto.sharePreviewAvailable = isOwner ? "public".equalsIgnoreCase(owner.getPrivacyLevel()) : null;
         return dto;
     }
 
