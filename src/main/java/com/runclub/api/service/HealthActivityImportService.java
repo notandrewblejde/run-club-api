@@ -57,7 +57,11 @@ public class HealthActivityImportService {
                 upsertOne(user, item);
                 imported++;
             } catch (Exception e) {
-                logger.log(Level.WARNING, "Skip health workout " + item.getExternalId(), e);
+                if ("CROSS_SOURCE_DUPLICATE".equals(e.getMessage())) {
+                    logger.info("Skipped cross-source duplicate: " + item.getExternalId());
+                } else {
+                    logger.log(Level.WARNING, "Skip health workout " + item.getExternalId(), e);
+                }
                 skipped++;
             }
         }
@@ -71,8 +75,33 @@ public class HealthActivityImportService {
 
         Activity activity = activityRepository
             .findByUser_IdAndImportSourceAndImportExternalId(uid, source, ext)
-            .orElseGet(Activity::new);
+            .orElse(null);
 
+        // Cross-source dedup: if no existing record for this source/externalId,
+        // check if a Strava (or other-source) activity already covers the same run
+        // Match: same user, start_date within ±5 minutes, distance within ±5%
+        if (activity == null && item.getStartDate() != null) {
+            java.time.LocalDateTime windowStart = item.getStartDate().minusMinutes(5);
+            java.time.LocalDateTime windowEnd = item.getStartDate().plusMinutes(5);
+            java.util.List<Activity> nearby = activityRepository
+                .findByUser_IdAndStartDateBetween(uid, windowStart, windowEnd);
+            for (Activity candidate : nearby) {
+                if (candidate.getImportSource().equals(source)) continue; // same source, different external id is fine
+                // Distance match: within 5%
+                if (item.getDistanceMeters() != null && candidate.getDistanceMeters() != null) {
+                    double ratio = item.getDistanceMeters().doubleValue() /
+                                   candidate.getDistanceMeters().doubleValue();
+                    if (ratio >= 0.95 && ratio <= 1.05) {
+                        // Duplicate from different source — skip
+                        logger.info("Skipping " + source + " activity (duplicate of " +
+                            candidate.getImportSource() + " activity " + candidate.getId() + ")");
+                        throw new IllegalStateException("CROSS_SOURCE_DUPLICATE");
+                    }
+                }
+            }
+        }
+
+        if (activity == null) activity = new Activity();
         if (activity.getId() == null) {
             activity.setUser(user);
         }
