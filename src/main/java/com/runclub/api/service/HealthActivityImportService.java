@@ -252,6 +252,7 @@ public class HealthActivityImportService {
      */
     @jakarta.annotation.PostConstruct
     public void runStartupDedup() {
+        logger.info("@PostConstruct runStartupDedup() registered — will run in 30s");
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
                 Thread.sleep(30_000); // wait 30s for app to fully start
