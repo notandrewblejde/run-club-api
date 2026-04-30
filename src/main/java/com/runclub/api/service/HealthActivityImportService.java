@@ -36,12 +36,14 @@ public class HealthActivityImportService {
                                        GoalAttributionService goalAttributionService,
                                        AthleteIntelligenceService athleteIntelligenceService,
                                        TrainingGoalService trainingGoalService,
-                                       NotificationService notificationService) {
+                                       NotificationService notificationService,
+                                       com.runclub.api.repository.UserRepository userRepository) {
         this.activityRepository = activityRepository;
         this.goalAttributionService = goalAttributionService;
         this.athleteIntelligenceService = athleteIntelligenceService;
         this.trainingGoalService = trainingGoalService;
         this.notificationService = notificationService;
+        this.userRepository = userRepository;
     }
 
     public record ImportResult(int imported, int skipped) {}
