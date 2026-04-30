@@ -5,6 +5,7 @@ import com.runclub.api.dto.ActivityArrivedCopy;
 import com.runclub.api.entity.Activity;
 import com.runclub.api.entity.User;
 import com.runclub.api.entity.UserNotification;
+import com.runclub.api.entity.UserNotificationPrefs;
 import com.runclub.api.repository.ActivityRepository;
 import com.runclub.api.repository.UserNotificationRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -116,6 +118,10 @@ class NotificationServiceTest {
         UUID activityId = UUID.randomUUID();
         UUID commentId = UUID.randomUUID();
 
+        UserNotificationPrefs prefsOn = new UserNotificationPrefs();
+        prefsOn.setActivityCommentAlerts(true);
+        when(pushNotificationService.getOrCreatePrefs(ownerId)).thenReturn(prefsOn);
+
         notificationService.createActivityCommentNotification(
             ownerId, activityId, commentId, "Alex", "Nice pace today!");
 
@@ -130,5 +136,20 @@ class NotificationServiceTest {
 
         verify(pushNotificationService).sendActivityCommentPush(
             eq(ownerId), eq(saved.getTitle()), eq(saved.getBody()), eq(activityId), eq(commentId));
+    }
+
+    @Test
+    void createActivityCommentNotification_skipsWhenUserOptedOut() {
+        UUID ownerId = UUID.randomUUID();
+        UserNotificationPrefs prefsOff = new UserNotificationPrefs();
+        prefsOff.setActivityCommentAlerts(false);
+        when(pushNotificationService.getOrCreatePrefs(ownerId)).thenReturn(prefsOff);
+
+        notificationService.createActivityCommentNotification(
+            ownerId, UUID.randomUUID(), UUID.randomUUID(), "Alex", "Hi");
+
+        verify(notificationRepository, never()).save(any());
+        verify(pushNotificationService, never()).sendActivityCommentPush(
+            any(), any(), any(), any(), any());
     }
 }

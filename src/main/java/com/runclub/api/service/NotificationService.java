@@ -98,6 +98,10 @@ public class NotificationService {
     @Transactional
     public void createActivityCommentNotification(UUID ownerUserId, UUID activityId, UUID commentId,
                                                   String actorDisplayName, String commentContent) {
+        if (!pushNotificationService.getOrCreatePrefs(ownerUserId).isActivityCommentAlerts()) {
+            return;
+        }
+
         UserNotification row = new UserNotification();
         row.setUserId(ownerUserId);
         row.setType(UserNotification.TYPE_ACTIVITY_COMMENT);
