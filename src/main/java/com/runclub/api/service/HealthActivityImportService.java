@@ -257,6 +257,25 @@ public class HealthActivityImportService {
             try {
                 Thread.sleep(30_000); // wait 30s for app to fully start
                 logger.info("Running one-time startup activity dedup...");
+
+                // Hardcoded cleanup for known duplicates that survived previous runs
+                java.util.List<String> knownDuplicates = java.util.List.of(
+                    "2323b912-2ff2-4771-ad50-5245945d3d41",  // apple_health dup of strava fdf8adc9
+                    "5d3eade6-2707-45e2-96ed-f4d46d569cf1"   // apple_health dup
+                );
+                for (String dupId : knownDuplicates) {
+                    try {
+                        java.util.UUID id = java.util.UUID.fromString(dupId);
+                        if (activityRepository.existsById(id)) {
+                            goalAttributionService.deleteContributionsByActivity(id);
+                            activityRepository.deleteById(id);
+                            logger.info("Deleted known duplicate activity: " + dupId);
+                        }
+                    } catch (Exception e) {
+                        logger.log(java.util.logging.Level.WARNING, "Could not delete known duplicate " + dupId, e);
+                    }
+                }
+
                 java.util.List<com.runclub.api.entity.User> allUsers = userRepository.findAll();
                 int totalRemoved = 0;
                 for (com.runclub.api.entity.User user : allUsers) {
