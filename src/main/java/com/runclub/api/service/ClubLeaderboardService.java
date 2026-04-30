@@ -25,8 +25,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Club-level distance leaderboards: rolling 30d, all-time in club, or a specific
- * goal (delegates to {@link ClubGoalService}).
+ * Club-level distance leaderboards: rolling 30d / 90d, or a specific goal
+ * (delegates to {@link ClubGoalService}).
  */
 @Service
 public class ClubLeaderboardService {
@@ -55,7 +55,7 @@ public class ClubLeaderboardService {
             return clubGoalService.getGoalLeaderboardForClub(clubId, goalId, take);
         }
         if (window == null || window.isBlank()) {
-            throw ApiException.badRequest("Missing window: use 30d, all, or pass goal_id");
+            throw ApiException.badRequest("Missing window: use 30d, 90d, or pass goal_id");
         }
         return switch (window) {
             case "30d" -> leaderboardLastNDays(clubId, 30, take);
