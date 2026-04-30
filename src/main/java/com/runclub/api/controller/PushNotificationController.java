@@ -62,7 +62,8 @@ public class PushNotificationController {
         UserNotificationPrefs updated = pushService.updatePrefs(userId,
             body.get("club_activity_alerts"),
             body.get("daily_coach_tip"),
-            body.get("goal_progress"));
+            body.get("goal_progress"),
+            body.get("activity_comment_alerts"));
         return ResponseEntity.ok(updated);
     }
 }

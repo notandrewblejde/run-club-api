@@ -20,6 +20,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,6 +36,9 @@ class NotificationServiceTest {
     @Mock
     private AthleteIntelligenceService athleteIntelligenceService;
 
+    @Mock
+    private PushNotificationService pushNotificationService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private NotificationService notificationService;
@@ -42,7 +46,8 @@ class NotificationServiceTest {
     @BeforeEach
     void setUp() {
         notificationService = new NotificationService(
-            notificationRepository, activityRepository, athleteIntelligenceService, objectMapper);
+            notificationRepository, activityRepository, athleteIntelligenceService, objectMapper,
+            pushNotificationService);
     }
 
     @Test
@@ -103,5 +108,27 @@ class NotificationServiceTest {
         verify(notificationRepository).save(any(UserNotification.class));
         assertEquals("Updated", existing.getTitle());
         assertEquals("New body", existing.getBody());
+    }
+
+    @Test
+    void createActivityCommentNotification_insertsRowAndSendsPush() {
+        UUID ownerId = UUID.randomUUID();
+        UUID activityId = UUID.randomUUID();
+        UUID commentId = UUID.randomUUID();
+
+        notificationService.createActivityCommentNotification(
+            ownerId, activityId, commentId, "Alex", "Nice pace today!");
+
+        ArgumentCaptor<UserNotification> cap = ArgumentCaptor.forClass(UserNotification.class);
+        verify(notificationRepository).save(cap.capture());
+        UserNotification saved = cap.getValue();
+        assertEquals(ownerId, saved.getUserId());
+        assertEquals(UserNotification.TYPE_ACTIVITY_COMMENT, saved.getType());
+        assertEquals(activityId, saved.getRelatedActivityId());
+        assertTrue(saved.getTitle().contains("Alex"));
+        assertTrue(saved.getBody().contains("Nice pace"));
+
+        verify(pushNotificationService).sendActivityCommentPush(
+            eq(ownerId), eq(saved.getTitle()), eq(saved.getBody()), eq(activityId), eq(commentId));
     }
 }

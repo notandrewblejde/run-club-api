@@ -12,6 +12,8 @@ import com.runclub.api.repository.ActivityKudoRepository;
 import com.runclub.api.repository.ActivityRepository;
 import com.runclub.api.repository.UserRepository;
 import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,19 +24,24 @@ import java.util.UUID;
 @Service
 public class ActivityEngagementService {
 
+    private static final Logger log = LoggerFactory.getLogger(ActivityEngagementService.class);
+
     private final ActivityRepository activityRepository;
     private final UserRepository userRepository;
     private final ActivityKudoRepository kudoRepository;
     private final ActivityCommentRepository commentRepository;
+    private final NotificationService notificationService;
 
     public ActivityEngagementService(ActivityRepository activityRepository,
                                      UserRepository userRepository,
                                      ActivityKudoRepository kudoRepository,
-                                     ActivityCommentRepository commentRepository) {
+                                     ActivityCommentRepository commentRepository,
+                                     NotificationService notificationService) {
         this.activityRepository = activityRepository;
         this.userRepository = userRepository;
         this.kudoRepository = kudoRepository;
         this.commentRepository = commentRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -91,6 +98,19 @@ public class ActivityEngagementService {
 
         activity.setCommentCount((activity.getCommentCount() == null ? 0 : activity.getCommentCount()) + 1);
         activityRepository.save(activity);
+
+        UUID ownerId = activity.getUser().getId();
+        if (!ownerId.equals(userId)) {
+            try {
+                String actorName = user.getDisplayName() != null && !user.getDisplayName().isBlank()
+                    ? user.getDisplayName().trim()
+                    : "Someone";
+                notificationService.createActivityCommentNotification(
+                    ownerId, activity.getId(), saved.getId(), actorName, saved.getContent());
+            } catch (Exception e) {
+                log.warn("Comment notification failed for activity {}: {}", activityId, e.getMessage());
+            }
+        }
 
         return Comment.from(saved);
     }

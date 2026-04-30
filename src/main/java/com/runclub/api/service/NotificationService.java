@@ -28,20 +28,24 @@ import java.util.logging.Logger;
 public class NotificationService {
 
     private static final Logger logger = Logger.getLogger(NotificationService.class.getName());
+    private static final int COMMENT_BODY_MAX = 220;
 
     private final UserNotificationRepository notificationRepository;
     private final ActivityRepository activityRepository;
     private final AthleteIntelligenceService athleteIntelligenceService;
     private final ObjectMapper objectMapper;
+    private final PushNotificationService pushNotificationService;
 
     public NotificationService(UserNotificationRepository notificationRepository,
                                ActivityRepository activityRepository,
                                AthleteIntelligenceService athleteIntelligenceService,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               PushNotificationService pushNotificationService) {
         this.notificationRepository = notificationRepository;
         this.activityRepository = activityRepository;
         this.athleteIntelligenceService = athleteIntelligenceService;
         this.objectMapper = objectMapper;
+        this.pushNotificationService = pushNotificationService;
     }
 
     public void createActivityArrivedNotificationAsync(UUID userId, UUID activityId) {
@@ -85,6 +89,46 @@ public class NotificationService {
             row.setCreatedAt(LocalDateTime.now(ZoneOffset.UTC));
         }
         notificationRepository.save(row);
+    }
+
+    /**
+     * In-app notification + optional push when another user comments on {@code ownerUserId}'s activity.
+     * Each comment creates its own row (not idempotent per activity).
+     */
+    @Transactional
+    public void createActivityCommentNotification(UUID ownerUserId, UUID activityId, UUID commentId,
+                                                  String actorDisplayName, String commentContent) {
+        UserNotification row = new UserNotification();
+        row.setUserId(ownerUserId);
+        row.setType(UserNotification.TYPE_ACTIVITY_COMMENT);
+        String name = actorDisplayName != null && !actorDisplayName.isBlank() ? actorDisplayName.trim() : "Someone";
+        row.setTitle(name + " commented on your activity");
+        row.setBody(truncateForNotification(commentContent));
+        row.setRelatedActivityId(activityId);
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("activityId", activityId.toString());
+            payload.put("commentId", commentId.toString());
+            row.setPayloadJson(objectMapper.writeValueAsString(payload));
+        } catch (Exception e) {
+            row.setPayloadJson("{\"activityId\":\"" + activityId + "\",\"commentId\":\"" + commentId + "\"}");
+        }
+        row.setCreatedAt(LocalDateTime.now(ZoneOffset.UTC));
+        notificationRepository.save(row);
+
+        try {
+            pushNotificationService.sendActivityCommentPush(
+                ownerUserId, row.getTitle(), row.getBody(), activityId, commentId);
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "Push for activity comment failed: " + e.getMessage());
+        }
+    }
+
+    private static String truncateForNotification(String raw) {
+        if (raw == null) return "";
+        String s = raw.trim();
+        if (s.length() <= COMMENT_BODY_MAX) return s;
+        return s.substring(0, COMMENT_BODY_MAX - 1) + "…";
     }
 
     @Transactional(readOnly = true)

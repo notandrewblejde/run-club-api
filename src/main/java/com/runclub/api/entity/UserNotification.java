@@ -15,6 +15,8 @@ public class UserNotification {
 
     public static final String TYPE_ACTIVITY_ARRIVED = "ACTIVITY_ARRIVED";
     public static final String TYPE_TRAINING_PLAN_UPDATED = "TRAINING_PLAN_UPDATED";
+    /** Someone (not the owner) commented on the recipient's activity. */
+    public static final String TYPE_ACTIVITY_COMMENT = "ACTIVITY_COMMENT";
 
     @Id
     @GeneratedValue

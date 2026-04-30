@@ -75,13 +75,29 @@ public class PushNotificationService {
     }
 
     @Transactional
-    public UserNotificationPrefs updatePrefs(UUID userId, Boolean clubActivity, Boolean dailyCoach, Boolean goalProgress) {
+    public UserNotificationPrefs updatePrefs(UUID userId, Boolean clubActivity, Boolean dailyCoach,
+                                             Boolean goalProgress, Boolean activityCommentAlerts) {
         UserNotificationPrefs p = getOrCreatePrefs(userId);
         if (clubActivity != null) p.setClubActivityAlerts(clubActivity);
         if (dailyCoach != null) p.setDailyCoachTip(dailyCoach);
         if (goalProgress != null) p.setGoalProgress(goalProgress);
+        if (activityCommentAlerts != null) p.setActivityCommentAlerts(activityCommentAlerts);
         p.setUpdatedAt(Instant.now());
         return prefsRepo.save(p);
+    }
+
+    /**
+     * Push for "someone commented on your activity". Data payload supports deep link to activity + comment.
+     */
+    public void sendActivityCommentPush(UUID recipientId, String title, String body,
+                                        UUID activityId, UUID commentId) {
+        UserNotificationPrefs prefs = getOrCreatePrefs(recipientId);
+        if (!prefs.isActivityCommentAlerts()) return;
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("type", "ACTIVITY_COMMENT");
+        data.put("activityId", activityId.toString());
+        data.put("commentId", commentId.toString());
+        sendToUser(recipientId, title, body, data);
     }
 
     // ── Send notifications ───────────────────────────────────────────────────
