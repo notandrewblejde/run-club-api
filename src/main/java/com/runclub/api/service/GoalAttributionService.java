@@ -260,4 +260,10 @@ public class GoalAttributionService {
         }
         logger.info("Backfilled " + created + " contribution(s) for goal " + goal.getId());
     }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void deleteContributionsByActivity(java.util.UUID activityId) {
+        contributionRepository.deleteByActivity_Id(activityId);
+    }
+
 }

@@ -200,7 +200,13 @@ public class HealthActivityImportService {
         }
 
         for (java.util.UUID id : toDelete) {
-            activityRepository.deleteById(id);
+            try {
+                // Delete goal contributions first (FK constraint)
+                goalAttributionService.deleteContributionsByActivity(id);
+                activityRepository.deleteById(id);
+            } catch (Exception e) {
+                logger.log(java.util.logging.Level.WARNING, "Could not delete duplicate activity " + id, e);
+            }
         }
         logger.info("Dedup complete for user " + userId + ": removed " + toDelete.size() + " duplicate(s)");
         return toDelete.size();

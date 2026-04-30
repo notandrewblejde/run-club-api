@@ -14,6 +14,9 @@ import java.util.UUID;
 
 @Repository
 public interface GoalContributionRepository extends JpaRepository<GoalContribution, UUID> {
+    @org.springframework.transaction.annotation.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM GoalContribution gc WHERE gc.activity.id = :activityId")
+    void deleteByActivity_Id(@org.springframework.data.repository.query.Param("activityId") java.util.UUID activityId);
     List<GoalContribution> findByGoal(ClubGoal goal);
     List<GoalContribution> findByGoalAndUser(ClubGoal goal, User user);
     Optional<GoalContribution> findByGoalAndActivity_Id(ClubGoal goal, UUID activityId);
