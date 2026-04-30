@@ -115,6 +115,11 @@ public class ClubLeaderboardService {
             BigDecimal miles = a.getDistanceMiles() != null ? a.getDistanceMiles() : BigDecimal.ZERO;
             totalByUserId.merge(uid, miles, BigDecimal::add);
         }
+        // Ensure all members appear even with 0 miles
+        for (User u : users) {
+            totalByUserId.putIfAbsent(u.getId(), BigDecimal.ZERO);
+            userById.putIfAbsent(u.getId(), u);
+        }
         return toRankedEntries(totalByUserId, userById, take);
     }
 
@@ -123,12 +128,6 @@ public class ClubLeaderboardService {
         Map<UUID, User> userById,
         int take
     ) {
-        // Include all members (even 0 miles) so the leaderboard always shows the full roster
-        // Ensure every member is represented, even if they have no runs in the window
-        for (User u : users) {
-            totalByUserId.putIfAbsent(u.getId(), BigDecimal.ZERO);
-            userById.putIfAbsent(u.getId(), u);
-        }
         List<Map.Entry<UUID, BigDecimal>> sorted = totalByUserId.entrySet().stream()
             .sorted((a, b) -> b.getValue().compareTo(a.getValue()))
             .limit(take)

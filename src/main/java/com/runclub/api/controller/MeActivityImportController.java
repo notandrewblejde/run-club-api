@@ -56,7 +56,7 @@ public class MeActivityImportController {
     @PostMapping("/dedup")
     public ResponseEntity<Map<String, Object>> deduplicateActivities(Authentication authentication) {
         UUID userId = Auth.userId(authentication);
-        int removed = healthImportService.deduplicateActivities(userId);
+        int removed = healthActivityImportService.deduplicateActivities(userId);
         return ResponseEntity.ok(Map.of(
             "removed", removed,
             "message", removed == 0 ? "No duplicates found" : removed + " duplicate(s) removed"
