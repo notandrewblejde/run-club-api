@@ -53,7 +53,11 @@ public class ActivityController {
             Authentication authentication) {
         UUID userId = Auth.userId(authentication);
         Page<com.runclub.api.entity.Activity> activities = activityService.getUserActivities(userId, page, limit);
-        List<Activity> data = activities.getContent().stream().map(Activity::from).toList();
+        List<Activity> data = activities.getContent().stream().map((com.runclub.api.entity.Activity entity) -> {
+            Activity dto = Activity.from(entity);
+            dto.ownedByViewer = true;
+            return dto;
+        }).toList();
         return ApiList.of(data, activities.hasNext(), activities.getTotalElements(), "/v1/activities");
     }
 

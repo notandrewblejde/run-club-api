@@ -101,7 +101,11 @@ public class FollowController {
             Authentication authentication) {
         UUID userId = Auth.userId(authentication);
         Page<com.runclub.api.entity.Activity> feed = followService.getHomeFeed(userId, page, limit);
-        List<Activity> data = feed.getContent().stream().map(Activity::from).toList();
+        List<Activity> data = feed.getContent().stream().map((com.runclub.api.entity.Activity entity) -> {
+            Activity dto = Activity.from(entity);
+            dto.ownedByViewer = entity.getUser() != null && entity.getUser().getId().equals(userId);
+            return dto;
+        }).toList();
         return ApiList.of(data, feed.hasNext(), feed.getTotalElements(), "/v1/feed/home");
     }
 }
