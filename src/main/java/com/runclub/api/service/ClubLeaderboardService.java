@@ -87,10 +87,7 @@ public class ClubLeaderboardService {
             .map(ClubMembership::getJoinedAt)
             .filter(Objects::nonNull)
             .min(Comparator.naturalOrder())
-            .orElse(null);
-        if (minJoin == null) {
-            return List.of();
-        }
+            .orElse(LocalDateTime.of(2020, 1, 1, 0, 0)); // fallback: include all history
         return buildFromActivities(club, minJoin, end, take);
     }
 
@@ -144,8 +141,13 @@ public class ClubLeaderboardService {
         Map<UUID, User> userById,
         int take
     ) {
+        // Include all members (even 0 miles) so the leaderboard always shows the full roster
+        // Ensure every member is represented, even if they have no runs in the window
+        for (User u : users) {
+            totalByUserId.putIfAbsent(u.getId(), BigDecimal.ZERO);
+            userById.putIfAbsent(u.getId(), u);
+        }
         List<Map.Entry<UUID, BigDecimal>> sorted = totalByUserId.entrySet().stream()
-            .filter(e -> e.getValue().compareTo(BigDecimal.ZERO) > 0)
             .sorted((a, b) -> b.getValue().compareTo(a.getValue()))
             .limit(take)
             .collect(Collectors.toList());
