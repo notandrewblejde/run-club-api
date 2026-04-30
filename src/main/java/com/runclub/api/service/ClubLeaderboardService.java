@@ -58,38 +58,20 @@ public class ClubLeaderboardService {
             throw ApiException.badRequest("Missing window: use 30d, all, or pass goal_id");
         }
         return switch (window) {
-            case "30d" -> leaderboardLast30Days(clubId, take);
-            case "all" -> leaderboardAllTimeInClub(clubId, take);
-            default -> throw ApiException.badRequest("window must be 30d or all (or use goal_id)");
+            case "30d" -> leaderboardLastNDays(clubId, 30, take);
+            case "90d" -> leaderboardLastNDays(clubId, 90, take);
+            default -> throw ApiException.badRequest("window must be 30d or 90d (or use goal_id)");
         };
     }
 
-    private List<LeaderboardEntry> leaderboardLast30Days(UUID clubId, int take) {
+    private List<LeaderboardEntry> leaderboardLastNDays(UUID clubId, int days, int take) {
         Club club = clubRepository.findById(clubId).orElseThrow(() -> ApiException.notFound("club"));
         LocalDateTime end = LocalDateTime.now();
-        LocalDateTime start = end.minusDays(30);
+        LocalDateTime start = end.minusDays(days);
         return buildFromActivities(club, start, end, take);
     }
 
-    /**
-     * Sums each member's run distance for activities on or after their club join time.
-     */
-    private List<LeaderboardEntry> leaderboardAllTimeInClub(UUID clubId, int take) {
-        Club club = clubRepository.findById(clubId).orElseThrow(() -> ApiException.notFound("club"));
-        List<ClubMembership> memberships = membershipRepository
-            .findByClub(club, PageRequest.of(0, 200))
-            .getContent();
-        if (memberships.isEmpty()) {
-            return List.of();
-        }
-        LocalDateTime end = LocalDateTime.now();
-        LocalDateTime minJoin = memberships.stream()
-            .map(ClubMembership::getJoinedAt)
-            .filter(Objects::nonNull)
-            .min(Comparator.naturalOrder())
-            .orElse(LocalDateTime.of(2020, 1, 1, 0, 0)); // fallback: include all history
-        return buildFromActivities(club, minJoin, end, take);
-    }
+    
 
     private List<LeaderboardEntry> buildFromActivities(
         Club club,
