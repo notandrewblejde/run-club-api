@@ -47,4 +47,19 @@ public class MeActivityImportController {
             .skipped(result.skipped())
             .build());
     }
+
+    /**
+     * Finds and removes duplicate activities for the authenticated user.
+     * Keeps the Strava version when a cross-source duplicate exists (Strava is more authoritative).
+     * Matches on: same user, start_date within ±5 minutes, distance within ±5%.
+     */
+    @PostMapping("/dedup")
+    public ResponseEntity<Map<String, Object>> deduplicateActivities(Authentication authentication) {
+        UUID userId = Auth.userId(authentication);
+        int removed = healthImportService.deduplicateActivities(userId);
+        return ResponseEntity.ok(Map.of(
+            "removed", removed,
+            "message", removed == 0 ? "No duplicates found" : removed + " duplicate(s) removed"
+        ));
+    }
 }

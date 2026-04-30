@@ -155,4 +155,59 @@ public class HealthActivityImportService {
             notificationService.createActivityArrivedNotificationAsync(ownerId, savedId);
         });
     }
+
+    /**
+     * Removes duplicate activities for a user across import sources.
+     * When a Strava and HealthKit activity cover the same run (same time ±5min, same distance ±5%),
+     * the non-Strava (lower-priority) one is deleted.
+     * Priority: strava > apple_health > health_connect
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public int deduplicateActivities(java.util.UUID userId) {
+        java.util.List<Activity> all = activityRepository.findByUser_Id(userId);
+        java.util.Set<java.util.UUID> toDelete = new java.util.HashSet<>();
+
+        // Sort: strava first (it wins), then apple_health, then others
+        all.sort((a, b) -> sourceRank(a.getImportSource()) - sourceRank(b.getImportSource()));
+
+        for (int i = 0; i < all.size(); i++) {
+            Activity a = all.get(i);
+            if (toDelete.contains(a.getId())) continue;
+            for (int j = i + 1; j < all.size(); j++) {
+                Activity b = all.get(j);
+                if (toDelete.contains(b.getId())) continue;
+                if (a.getImportSource().equals(b.getImportSource())) continue; // same source, not a cross-source dupe
+                if (a.getStartDate() == null || b.getStartDate() == null) continue;
+
+                long diffMinutes = Math.abs(java.time.Duration.between(a.getStartDate(), b.getStartDate()).toMinutes());
+                if (diffMinutes > 5) continue;
+
+                if (a.getDistanceMeters() != null && b.getDistanceMeters() != null) {
+                    double ratio = a.getDistanceMeters().doubleValue() / b.getDistanceMeters().doubleValue();
+                    if (ratio >= 0.95 && ratio <= 1.05) {
+                        // b is the lower-priority duplicate — mark for deletion
+                        toDelete.add(b.getId());
+                        logger.info("Dedup: removing " + b.getImportSource() + " activity " + b.getId()
+                            + " (duplicate of " + a.getImportSource() + " activity " + a.getId() + ")");
+                    }
+                }
+            }
+        }
+
+        for (java.util.UUID id : toDelete) {
+            activityRepository.deleteById(id);
+        }
+        logger.info("Dedup complete for user " + userId + ": removed " + toDelete.size() + " duplicate(s)");
+        return toDelete.size();
+    }
+
+    private static int sourceRank(String source) {
+        return switch (source == null ? "" : source) {
+            case "strava" -> 0;
+            case "apple_health" -> 1;
+            case "health_connect" -> 2;
+            default -> 3;
+        };
+    }
+
 }
