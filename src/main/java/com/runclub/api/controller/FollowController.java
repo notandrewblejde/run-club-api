@@ -13,7 +13,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -29,17 +28,9 @@ public class FollowController {
 
     @PostMapping("/users/{userId}/follow")
     @ResponseStatus(HttpStatus.CREATED)
-    public Map<String, Object> followUser(@PathVariable UUID userId, Authentication authentication) {
+    public Follow followUser(@PathVariable UUID userId, Authentication authentication) {
         com.runclub.api.entity.Follow f = followService.followUser(Auth.userId(authentication), userId);
-        Follow body = Follow.following(f);
-        return Map.of(
-            "object", body.object,
-            "follower_id", body.followerId,
-            "following_id", body.followingId,
-            "user", body.user,
-            "status", f.getStatus(),
-            "created", body.created != null ? body.created : 0
-        );
+        return Follow.followingWithStatus(f);
     }
 
     @DeleteMapping("/users/{userId}/follow")

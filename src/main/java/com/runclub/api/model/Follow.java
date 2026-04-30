@@ -25,6 +25,10 @@ public class Follow {
     @JsonProperty("created")
     public Long created;
 
+    /** Present on {@code POST /v1/users/{id}/follow} (relationship state); omitted on list payloads. */
+    @JsonProperty("status")
+    public String status;
+
     public static Follow follower(com.runclub.api.entity.Follow f) {
         if (f == null) return null;
         Follow d = new Follow();
@@ -42,6 +46,13 @@ public class Follow {
         d.followingId = f.getFollowing() != null ? f.getFollowing().getId() : null;
         d.user = User.from(f.getFollowing());
         d.created = f.getCreatedAt() != null ? f.getCreatedAt().toEpochSecond(ZoneOffset.UTC) : null;
+        return d;
+    }
+
+    /** Same as {@link #following} plus {@code status} from the persistence row (create-follow response). */
+    public static Follow followingWithStatus(com.runclub.api.entity.Follow f) {
+        Follow d = following(f);
+        d.status = f.getStatus();
         return d;
     }
 }

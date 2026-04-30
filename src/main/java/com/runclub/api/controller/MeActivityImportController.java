@@ -4,6 +4,7 @@ import com.runclub.api.api.Auth;
 import com.runclub.api.dto.health.HealthWorkoutImportRequest;
 import com.runclub.api.entity.User;
 import com.runclub.api.repository.UserRepository;
+import com.runclub.api.model.JsonDtos.HealthImportResult;
 import com.runclub.api.service.HealthActivityImportService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -14,7 +15,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -33,7 +33,7 @@ public class MeActivityImportController {
     }
 
     @PostMapping("/health-import")
-    public ResponseEntity<Map<String, Object>> importHealthWorkouts(
+    public ResponseEntity<HealthImportResult> importHealthWorkouts(
             @Valid @RequestBody HealthWorkoutImportRequest body,
             Authentication authentication) {
         UUID userId = Auth.userId(authentication);
@@ -42,9 +42,9 @@ public class MeActivityImportController {
         HealthActivityImportService.ImportResult result =
             healthActivityImportService.importWorkouts(user, body.getWorkouts());
 
-        Map<String, Object> out = new HashMap<>();
-        out.put("imported", result.imported());
-        out.put("skipped", result.skipped());
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(HealthImportResult.builder()
+            .imported(result.imported())
+            .skipped(result.skipped())
+            .build());
     }
 }

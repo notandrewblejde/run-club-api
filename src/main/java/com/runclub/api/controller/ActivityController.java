@@ -20,6 +20,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import com.runclub.api.model.JsonDtos.ActivitySummary;
+import com.runclub.api.model.JsonDtos.CoachReply;
+
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -86,18 +89,21 @@ public class ActivityController {
     }
 
     @GetMapping("/{activityId}/summary")
-    public ResponseEntity<Map<String, Object>> getSummary(
+    public ResponseEntity<ActivitySummary> getSummary(
             @PathVariable UUID activityId,
             Authentication authentication) {
         UUID userId = Auth.userId(authentication);
         // Authorization piggybacks on getActivity (throws 404/403 if needed).
         activityService.getActivity(activityId, userId);
         String summary = athleteIntelligenceService.getOrCreateActivitySummary(activityId);
-        return ResponseEntity.ok(Map.of("activity_id", activityId, "summary", summary));
+        return ResponseEntity.ok(ActivitySummary.builder()
+            .activityId(activityId)
+            .summary(summary)
+            .build());
     }
 
     @PostMapping("/{activityId}/coach/chat")
-    public ResponseEntity<Map<String, String>> coachChat(
+    public ResponseEntity<CoachReply> coachChat(
             @PathVariable UUID activityId,
             @RequestBody(required = false) Map<String, String> body,
             Authentication authentication) {
@@ -116,7 +122,7 @@ public class ActivityController {
         }
         String reply = athleteIntelligenceService.coachChatAboutActivity(
             activityId, userId, message.trim(), goalContext);
-        return ResponseEntity.ok(Map.of("reply", reply));
+        return ResponseEntity.ok(CoachReply.builder().reply(reply).build());
     }
 
     @PostMapping(value = "/{activityId}/coach/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

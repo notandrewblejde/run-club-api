@@ -2,6 +2,7 @@ package com.runclub.api.controller;
 
 import com.runclub.api.api.ApiException;
 import com.runclub.api.api.Auth;
+import com.runclub.api.model.JsonDtos.CoachReply;
 import com.runclub.api.service.AthleteIntelligenceService;
 import com.runclub.api.service.TrainingGoalService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,7 +39,7 @@ public class MeAiController {
      * General coaching chat using recent activities + roll-up stats and optional goal / goal-feedback context.
      */
     @PostMapping("/chat")
-    public ResponseEntity<Map<String, String>> globalChat(
+    public ResponseEntity<CoachReply> globalChat(
             @RequestBody(required = false) Map<String, String> body,
             Authentication authentication) {
         UUID userId = Auth.userId(authentication);
@@ -58,7 +59,7 @@ public class MeAiController {
             log.warn("Skipping training-goal context for global AI chat: {}", e.toString());
         }
         String reply = athleteIntelligenceService.coachChatGlobal(userId, trimmed, stats, goalContext);
-        return ResponseEntity.ok(Map.of("reply", reply));
+        return ResponseEntity.ok(CoachReply.builder().reply(reply).build());
     }
 
     /**

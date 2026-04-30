@@ -14,6 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import com.runclub.api.model.JsonDtos.NotificationPreview;
+import com.runclub.api.model.Notification;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -97,17 +100,17 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> preview(UUID userId) {
+    public NotificationPreview preview(UUID userId) {
         long unread = unreadCount(userId);
         Optional<UserNotification> firstUnread = notificationRepository
             .findFirstByUserIdAndReadAtIsNullOrderByCreatedAtDesc(userId);
         Optional<UserNotification> latestAny = notificationRepository
             .findFirstByUserIdOrderByCreatedAtDesc(userId);
         UserNotification latest = firstUnread.or(() -> latestAny).orElse(null);
-        Map<String, Object> out = new HashMap<>();
-        out.put("unread_count", unread);
-        out.put("latest", latest == null ? null : toMap(latest));
-        return out;
+        return NotificationPreview.builder()
+            .unreadCount(unread)
+            .latest(latest == null ? null : Notification.from(latest))
+            .build();
     }
 
     @Transactional
@@ -129,16 +132,4 @@ public class NotificationService {
         return notificationRepository.markAllReadForUser(userId, LocalDateTime.now(ZoneOffset.UTC));
     }
 
-    public static Map<String, Object> toMap(UserNotification n) {
-        Map<String, Object> m = new HashMap<>();
-        m.put("id", n.getId().toString());
-        m.put("type", n.getType());
-        m.put("title", n.getTitle());
-        m.put("body", n.getBody());
-        m.put("payload_json", n.getPayloadJson());
-        m.put("related_activity_id", n.getRelatedActivityId() != null ? n.getRelatedActivityId().toString() : null);
-        m.put("read_at", n.getReadAt() != null ? n.getReadAt().toString() : null);
-        m.put("created_at", n.getCreatedAt().toString());
-        return m;
-    }
 }

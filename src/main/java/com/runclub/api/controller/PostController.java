@@ -3,6 +3,7 @@ package com.runclub.api.controller;
 import com.runclub.api.api.Auth;
 import com.runclub.api.dto.CreatePostRequest;
 import com.runclub.api.dto.UpdatePostRequest;
+import com.runclub.api.model.ClubFeed;
 import com.runclub.api.model.Post;
 import com.runclub.api.service.PostService;
 import com.runclub.api.service.PostUploadService;
@@ -75,12 +76,9 @@ public class PostController {
         return postUploadService.presignPostPhotoUpload(clubId, Auth.userId(authentication), contentType);
     }
 
-    /**
-     * Mixed feed of posts + activities, kept loose-typed for now.
-     * Could be promoted to a typed FeedItem with a discriminated union later.
-     */
+    /** Mixed feed of club posts and member activities ({@link com.runclub.api.model.ClubFeedItem}). */
     @GetMapping("/feed")
-    public Map<String, Object> getClubFeed(
+    public ClubFeed getClubFeed(
             @PathVariable UUID clubId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit) {

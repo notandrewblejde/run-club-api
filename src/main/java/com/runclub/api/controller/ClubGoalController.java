@@ -4,6 +4,7 @@ import com.runclub.api.api.ApiList;
 import com.runclub.api.api.Auth;
 import com.runclub.api.dto.CreateGoalRequest;
 import com.runclub.api.dto.UpdateGoalRequest;
+import com.runclub.api.model.ClubGoalContribution;
 import com.runclub.api.model.Goal;
 import com.runclub.api.model.GoalProgress;
 import com.runclub.api.model.LeaderboardEntry;
@@ -108,7 +109,7 @@ public class ClubGoalController {
     }
 
     @PostMapping("/{goalId}/contributions")
-    public ResponseEntity<Map<String, Object>> contribute(
+    public ResponseEntity<ClubGoalContribution> contribute(
             @PathVariable UUID clubId,
             @PathVariable UUID goalId,
             @RequestBody Map<String, String> body,
@@ -120,11 +121,7 @@ public class ClubGoalController {
         UUID userId = Auth.userId(authentication);
         com.runclub.api.entity.GoalContribution c = goalService.recordContribution(
             goalId, userId, UUID.fromString(activityIdStr));
-        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
-            "object", "goal_contribution",
-            "id", c.getId(),
-            "goal_id", c.getGoal().getId(),
-            "distance_miles", c.getDistanceMiles()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ClubGoalContribution.from(c));
     }
 
     @PostMapping("/{goalId}/recalculate")
