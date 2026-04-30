@@ -64,6 +64,7 @@ public class ClubLeaderboardService {
         };
     }
 
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     private List<LeaderboardEntry> leaderboardLastNDays(UUID clubId, int days, int take) {
         Club club = clubRepository.findById(clubId).orElseThrow(() -> ApiException.notFound("club"));
         LocalDateTime end = LocalDateTime.now();
@@ -73,6 +74,7 @@ public class ClubLeaderboardService {
 
     
 
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     private List<LeaderboardEntry> buildFromActivities(
         Club club,
         LocalDateTime rangeStart,

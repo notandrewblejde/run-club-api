@@ -123,6 +123,7 @@ public class PostService {
         postRepository.delete(post);
     }
 
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ClubFeed getClubFeed(UUID clubId, int page, int limit) {
         Club club = clubRepository.findById(clubId)
             .orElseThrow(() -> ApiException.notFound("club"));

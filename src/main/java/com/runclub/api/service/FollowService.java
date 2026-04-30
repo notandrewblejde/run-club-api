@@ -117,6 +117,7 @@ public class FollowService {
         return followRepository.findByFollowerAndStatus(user, STATUS_ACCEPTED, pageable);
     }
 
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public Page<Activity> getHomeFeed(UUID userId, int page, int limit) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> ApiException.notFound("user"));
