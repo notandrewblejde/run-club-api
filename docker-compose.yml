@@ -1,0 +1,24 @@
+# Local PostgreSQL for API development (matches default JDBC in application.properties).
+# Usage: docker compose up -d
+# Then: export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/runclub
+#        export SPRING_DATASOURCE_USERNAME=postgres
+#        export SPRING_DATASOURCE_PASSWORD=postgres
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: runclub
+    volumes:
+      - runclub_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d runclub']
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  runclub_pg_data:

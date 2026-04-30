@@ -20,6 +20,15 @@ Java Spring Boot backend for Run Club - a social running app for connecting runn
 - PostgreSQL 13+
 - Environment variables configured (see .env.example)
 
+### Local PostgreSQL (Docker)
+
+Optional — avoids installing Postgres on the host:
+
+```bash
+docker compose up -d
+# Wait until healthy (pg_isready), then use the same JDBC URL and credentials below.
+```
+
 ### Local Development
 
 ```bash
@@ -37,12 +46,21 @@ export S3_BUCKET=run-club-photos
 mvn clean spring-boot:run
 ```
 
-Server runs on `http://localhost:8080`
+Server runs on `http://localhost:8080` with context path **`/api`** (e.g. health: `http://localhost:8080/api/health`).
+
+### API contract (mobile app)
+
+There are **no** automated end-to-end or OpenAPI-validation tests in this repo today (only a small Mockito unit test under `src/test`). Confidence in the front/back contract comes from:
+
+1. **Regenerating types** from a running API: in `run-club-app`, `npm run gen:api` (defaults to `http://localhost:8080/api/v3/api-docs`).
+2. **TypeScript** (`npx tsc --noEmit` in the app) after regeneration.
+
+To add CI confidence later, typical patterns are: **Testcontainers** + `@SpringBootTest` + HTTP smoke tests for critical routes, and/or a CI step that runs `gen:api` against a deployed/staging URL and fails if `schema.d.ts` would change.
 
 ### Health Check
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8080/api/health
 ```
 
 Response:
