@@ -93,15 +93,23 @@ public class HealthActivityImportService {
             for (Activity candidate : nearby) {
                 if (candidate.getImportSource().equals(source)) continue; // same source, different external id is fine
                 // Distance match: within 5%
+                boolean isDistanceDupe = false;
                 if (item.getDistanceMeters() != null && candidate.getDistanceMeters() != null) {
                     double ratio = item.getDistanceMeters().doubleValue() /
                                    candidate.getDistanceMeters().doubleValue();
-                    if (ratio >= 0.95 && ratio <= 1.05) {
-                        // Duplicate from different source — skip
-                        logger.info("Skipping " + source + " activity (duplicate of " +
-                            candidate.getImportSource() + " activity " + candidate.getId() + ")");
-                        throw new IllegalStateException("CROSS_SOURCE_DUPLICATE");
-                    }
+                    isDistanceDupe = (ratio >= 0.95 && ratio <= 1.05);
+                } else if (item.getMovingTimeSeconds() != null && candidate.getMovingTimeSeconds() != null) {
+                    double durationRatio = item.getMovingTimeSeconds().doubleValue() / candidate.getMovingTimeSeconds();
+                    isDistanceDupe = (durationRatio >= 0.95 && durationRatio <= 1.05);
+                } else {
+                    // No distance or duration — time window match alone is sufficient
+                    isDistanceDupe = true;
+                }
+                if (isDistanceDupe) {
+                    // Duplicate from different source — skip
+                    logger.info("Skipping " + source + " activity (duplicate of " +
+                        candidate.getImportSource() + " activity " + candidate.getId() + ")");
+                    throw new IllegalStateException("CROSS_SOURCE_DUPLICATE");
                 }
             }
         }
@@ -191,20 +199,34 @@ public class HealthActivityImportService {
             for (int j = i + 1; j < all.size(); j++) {
                 Activity b = all.get(j);
                 if (toDelete.contains(b.getId())) continue;
-                if (a.getImportSource().equals(b.getImportSource())) continue; // same source, not a cross-source dupe
                 if (a.getStartDate() == null || b.getStartDate() == null) continue;
 
-                long diffMinutes = Math.abs(java.time.Duration.between(a.getStartDate(), b.getStartDate()).toMinutes());
-                if (diffMinutes > 5) continue;
+                long diffSeconds = Math.abs(java.time.Duration.between(a.getStartDate(), b.getStartDate()).toSeconds());
+                if (diffSeconds > 300) continue; // more than 5 min apart — not the same run
 
+                boolean sameSource = a.getImportSource().equals(b.getImportSource());
+                boolean distanceMatch;
                 if (a.getDistanceMeters() != null && b.getDistanceMeters() != null) {
                     double ratio = a.getDistanceMeters().doubleValue() / b.getDistanceMeters().doubleValue();
-                    if (ratio >= 0.95 && ratio <= 1.05) {
-                        // b is the lower-priority duplicate — mark for deletion
-                        toDelete.add(b.getId());
-                        logger.info("Dedup: removing " + b.getImportSource() + " activity " + b.getId()
-                            + " (duplicate of " + a.getImportSource() + " activity " + a.getId() + ")");
+                    distanceMatch = (ratio >= 0.95 && ratio <= 1.05);
+                } else {
+                    // If either is missing distance, also check duration similarity
+                    if (a.getMovingTimeSeconds() != null && b.getMovingTimeSeconds() != null) {
+                        double durationRatio = (double) a.getMovingTimeSeconds() / b.getMovingTimeSeconds();
+                        distanceMatch = (durationRatio >= 0.95 && durationRatio <= 1.05);
+                    } else {
+                        // Only time window match — treat as duplicate if within 2 min
+                        distanceMatch = diffSeconds <= 120;
                     }
+                }
+
+                if (distanceMatch) {
+                    // b is the lower-priority duplicate — mark for deletion
+                    // For same-source: keep the one with GPS data, or the older one
+                    toDelete.add(b.getId());
+                    logger.info("Dedup: removing " + b.getImportSource() + " activity " + b.getId()
+                        + " (duplicate of " + a.getImportSource() + " activity " + a.getId()
+                        + (sameSource ? " [same-source]" : " [cross-source]") + ")");
                 }
             }
         }
