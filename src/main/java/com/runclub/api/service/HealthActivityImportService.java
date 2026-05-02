@@ -185,7 +185,11 @@ public class HealthActivityImportService {
         all.sort((a, b) -> {
             int rankDiff = sourceRank(a.getImportSource()) - sourceRank(b.getImportSource());
             if (rankDiff != 0) return rankDiff;
-            // Same source rank: prefer the one with GPS data
+            // Same source rank: prefer the one with photos, then GPS data, then most recent
+            boolean aHasPhotos = a.getAppPhotos() != null && a.getAppPhotos().length > 0;
+            boolean bHasPhotos = b.getAppPhotos() != null && b.getAppPhotos().length > 0;
+            if (aHasPhotos && !bHasPhotos) return -1;
+            if (!aHasPhotos && bHasPhotos) return 1;
             boolean aHasGps = hasGpsData(a);
             boolean bHasGps = hasGpsData(b);
             if (aHasGps && !bHasGps) return -1;
