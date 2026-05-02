@@ -21,15 +21,27 @@ public class ActivityService {
     private final UserRepository userRepository;
     private final ActivityKudoRepository kudoRepository;
     private final FollowService followService;
+    private final ActivityUploadService uploadService;
 
     public ActivityService(ActivityRepository activityRepository,
                            UserRepository userRepository,
                            ActivityKudoRepository kudoRepository,
-                           FollowService followService) {
+                           FollowService followService,
+                           ActivityUploadService uploadService) {
         this.activityRepository = activityRepository;
         this.userRepository = userRepository;
         this.kudoRepository = kudoRepository;
         this.followService = followService;
+        this.uploadService = uploadService;
+    }
+
+    /** Re-sign app_photos so they are readable (bucket is private, URLs expire). */
+    public Activity withSignedPhotos(Activity dto) {
+        if (dto.appPhotos != null && dto.appPhotos.length > 0) {
+            var signed = uploadService.presignReadUrls(java.util.Arrays.asList(dto.appPhotos));
+            dto.appPhotos = signed.toArray(new String[0]);
+        }
+        return dto;
     }
 
     public Page<com.runclub.api.entity.Activity> getUserActivities(UUID userId, int page, int limit) {
@@ -61,7 +73,7 @@ public class ActivityService {
         dto.kudoedByViewer = kudoRepository.findByActivityAndUser(entity, requester).isPresent();
         dto.ownedByViewer = isOwner;
         dto.sharePreviewAvailable = isOwner ? "public".equalsIgnoreCase(owner.getPrivacyLevel()) : null;
-        return dto;
+        return withSignedPhotos(dto);
     }
 
     /**

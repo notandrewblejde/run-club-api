@@ -59,7 +59,7 @@ public class ActivityController {
         List<Activity> data = activities.getContent().stream().map((com.runclub.api.entity.Activity entity) -> {
             Activity dto = Activity.from(entity);
             dto.ownedByViewer = true;
-            return dto;
+            return activityService.withSignedPhotos(dto);
         }).toList();
         return ApiList.of(data, activities.hasNext(), activities.getTotalElements(), "/v1/activities");
     }

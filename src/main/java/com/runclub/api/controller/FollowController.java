@@ -5,6 +5,7 @@ import com.runclub.api.api.Auth;
 import com.runclub.api.model.Activity;
 import com.runclub.api.model.Follow;
 import com.runclub.api.model.FollowRequest;
+import com.runclub.api.service.ActivityService;
 import com.runclub.api.service.FollowService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
@@ -21,9 +22,11 @@ import java.util.UUID;
 public class FollowController {
 
     private final FollowService followService;
+    private final ActivityService activityService;
 
-    public FollowController(FollowService followService) {
+    public FollowController(FollowService followService, ActivityService activityService) {
         this.followService = followService;
+        this.activityService = activityService;
     }
 
     @PostMapping("/users/{userId}/follow")
@@ -95,7 +98,7 @@ public class FollowController {
         List<Activity> data = feed.getContent().stream().map((com.runclub.api.entity.Activity entity) -> {
             Activity dto = Activity.from(entity);
             dto.ownedByViewer = entity.getUser() != null && entity.getUser().getId().equals(userId);
-            return dto;
+            return activityService.withSignedPhotos(dto);
         }).toList();
         return ApiList.of(data, feed.hasNext(), feed.getTotalElements(), "/v1/feed/home");
     }
